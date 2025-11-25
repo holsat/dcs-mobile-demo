@@ -146,29 +146,14 @@ export default function HomeScreen() {
               </Pressable>
             )}
           </View>
-        ) : selectedResource && !searchVisible ? (
-          <View style={styles.metaPanel}>
-            <View>
-              <Text style={styles.metaLabel}>Service</Text>
-              <Text style={styles.metaValue}>{selectedResource.serviceTitle}</Text>
-            </View>
-            <View>
-              <Text style={styles.metaLabel}>Language</Text>
-              <Text style={styles.metaValue}>{selectedResource.language}</Text>
-            </View>
-            <View>
-              <Text style={styles.metaLabel}>Date</Text>
-              <Text style={styles.metaValue}>{selectedResource.date}</Text>
-            </View>
-          </View>
-        ) : (
+        ) : !selectedResource ? (
           <View style={styles.placeholder}>
             <Text style={styles.placeholderTitle}>Select a Service</Text>
             <Text style={styles.placeholderText}>
               Tap the Services tab below to choose a date and load chant resources from the GOA DCS.
             </Text>
           </View>
-        )}
+        ) : null}
 
         <View style={styles.viewer}>
           {selectedResource ? (
