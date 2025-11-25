@@ -18,6 +18,9 @@ export default function HomeScreen() {
   const iframeRef = React.useRef<HTMLIFrameElement>(null);
   const webViewRef = React.useRef<any>(null);
   const [canGoBack, setCanGoBack] = React.useState(false);
+  const [matchCount, setMatchCount] = React.useState(0);
+  const [currentMatchIndex, setCurrentMatchIndex] = React.useState(0);
+  const matchElementsRef = React.useRef<HTMLElement[]>([]);
 
   // On web platform, fetch the HTML content using dynamic import to avoid bundling cheerio on native
   React.useEffect(() => {
@@ -73,29 +76,140 @@ export default function HomeScreen() {
   };
 
   const toggleSearch = () => {
-    setSearchVisible(!searchVisible);
-    if (searchVisible) {
+    const newSearchVisible = !searchVisible;
+    setSearchVisible(newSearchVisible);
+    if (!newSearchVisible) {
       setSearchQuery('');
+      clearSearchHighlights();
     }
   };
 
-  // Handle search in iframe on web platform
-  React.useEffect(() => {
-    if (Platform.OS !== 'web' || !iframeRef.current || !searchQuery) return;
+  // Clear all search highlights
+  const clearSearchHighlights = () => {
+    if (Platform.OS !== 'web' || !iframeRef.current) return;
+    
+    const iframeDoc = iframeRef.current.contentDocument;
+    if (!iframeDoc) return;
 
-    const iframe = iframeRef.current;
-    const timer = setTimeout(() => {
-      try {
-        const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
-        if (iframeDoc) {
-          // Use the browser's find API to search
-          if (iframe.contentWindow) {
-            iframe.contentWindow.find(searchQuery, false, false, true, false, true, false);
-          }
-        }
-      } catch (error) {
-        console.error('Search error:', error);
+    const highlights = iframeDoc.querySelectorAll('.search-highlight, .search-highlight-current');
+    highlights.forEach(highlight => {
+      const parent = highlight.parentNode;
+      if (parent) {
+        parent.replaceChild(document.createTextNode(highlight.textContent || ''), highlight);
+        parent.normalize();
       }
+    });
+    
+    matchElementsRef.current = [];
+    setMatchCount(0);
+    setCurrentMatchIndex(0);
+  };
+
+  // Search and highlight matches in iframe
+  const performSearch = (query: string) => {
+    if (Platform.OS !== 'web' || !iframeRef.current || !query) {
+      clearSearchHighlights();
+      return;
+    }
+
+    const iframeDoc = iframeRef.current.contentDocument;
+    if (!iframeDoc) return;
+
+    // Clear previous highlights
+    clearSearchHighlights();
+
+    // Find all text nodes and highlight matches
+    const matches: HTMLElement[] = [];
+    const searchRegex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+    
+    const walkTextNodes = (node: Node) => {
+      if (node.nodeType === 3) { // Text node
+        const text = node.textContent || '';
+        if (searchRegex.test(text)) {
+          const span = iframeDoc.createElement('span');
+          const parent = node.parentNode;
+          if (!parent) return;
+          
+          span.innerHTML = text.replace(searchRegex, (match) => {
+            return `<mark class="search-highlight" style="background-color: #fef08a; padding: 2px 0;">${match}</mark>`;
+          });
+          
+          parent.replaceChild(span, node);
+          
+          // Collect all highlight elements
+          const highlightElements = span.querySelectorAll('.search-highlight');
+          highlightElements.forEach(el => matches.push(el as HTMLElement));
+        }
+      } else if (node.nodeType === 1) { // Element node
+        const element = node as HTMLElement;
+        // Skip script, style, and other non-visible elements
+        if (!['SCRIPT', 'STYLE', 'NOSCRIPT', 'IFRAME'].includes(element.tagName)) {
+          Array.from(node.childNodes).forEach(walkTextNodes);
+        }
+      }
+    };
+
+    walkTextNodes(iframeDoc.body);
+    
+    matchElementsRef.current = matches;
+    setMatchCount(matches.length);
+    
+    if (matches.length > 0) {
+      setCurrentMatchIndex(0);
+      highlightCurrentMatch(0);
+    }
+  };
+
+  // Highlight the current match and scroll to it
+  const highlightCurrentMatch = (index: number) => {
+    const matches = matchElementsRef.current;
+    if (!matches.length || index < 0 || index >= matches.length) return;
+
+    // Remove current highlight from all matches
+    matches.forEach(match => {
+      match.className = 'search-highlight';
+      match.style.backgroundColor = '#fef08a';
+    });
+
+    // Highlight current match
+    const currentMatch = matches[index];
+    currentMatch.className = 'search-highlight-current';
+    currentMatch.style.backgroundColor = '#facc15';
+    currentMatch.style.fontWeight = 'bold';
+    
+    // Scroll to current match
+    currentMatch.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
+  // Navigate to next match
+  const nextMatch = () => {
+    const matches = matchElementsRef.current;
+    if (matches.length === 0) return;
+    
+    const nextIndex = (currentMatchIndex + 1) % matches.length;
+    setCurrentMatchIndex(nextIndex);
+    highlightCurrentMatch(nextIndex);
+  };
+
+  // Navigate to previous match
+  const previousMatch = () => {
+    const matches = matchElementsRef.current;
+    if (matches.length === 0) return;
+    
+    const prevIndex = currentMatchIndex === 0 ? matches.length - 1 : currentMatchIndex - 1;
+    setCurrentMatchIndex(prevIndex);
+    highlightCurrentMatch(prevIndex);
+  };
+
+  // Handle search with debouncing
+  React.useEffect(() => {
+    if (Platform.OS !== 'web' || !searchQuery) {
+      clearSearchHighlights();
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      performSearch(searchQuery);
     }, 300); // Debounce search
 
     return () => clearTimeout(timer);
@@ -131,20 +245,38 @@ export default function HomeScreen() {
         )}
 
         {selectedResource && searchVisible ? (
-          <View style={styles.searchPanel}>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search in service content..."
-              placeholderTextColor="#94a3b8"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              autoFocus
-            />
-            {searchQuery.length > 0 && (
+          <View style={styles.searchContainer}>
+            <View style={styles.searchPanel}>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search in service content..."
+                placeholderTextColor="#94a3b8"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoFocus
+              />
+              {matchCount > 0 && (
+                <View style={styles.matchInfo}>
+                  <Text style={styles.matchText}>
+                    {currentMatchIndex + 1} of {matchCount}
+                  </Text>
+                  <View style={styles.navButtons}>
+                    <Pressable style={styles.navButton} onPress={previousMatch}>
+                      <Text style={styles.navButtonText}>↑</Text>
+                    </Pressable>
+                    <Pressable style={styles.navButton} onPress={nextMatch}>
+                      <Text style={styles.navButtonText}>↓</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              )}
+              {searchQuery.length > 0 && matchCount === 0 && (
+                <Text style={styles.noMatchText}>No matches</Text>
+              )}
               <Pressable style={styles.clearButton} onPress={() => setSearchQuery('')}>
                 <Text style={styles.clearButtonText}>✕</Text>
               </Pressable>
-            )}
+            </View>
           </View>
         ) : !selectedResource ? (
           <View style={styles.placeholder}>
@@ -332,6 +464,9 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     textAlign: 'center',
   },
+  searchContainer: {
+    marginBottom: 12,
+  },
   searchPanel: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -339,7 +474,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    marginBottom: 16,
     borderWidth: 2,
     borderColor: '#1e40af',
   },
@@ -348,6 +482,44 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#0f172a',
     paddingVertical: 8,
+  },
+  matchInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 8,
+    paddingLeft: 8,
+    borderLeftWidth: 1,
+    borderLeftColor: '#cbd5e1',
+  },
+  matchText: {
+    fontSize: 14,
+    color: '#64748b',
+    fontWeight: '500',
+    marginRight: 8,
+  },
+  navButtons: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  navButton: {
+    backgroundColor: '#1e40af',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    minWidth: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  noMatchText: {
+    fontSize: 14,
+    color: '#ef4444',
+    fontStyle: 'italic',
+    marginLeft: 8,
   },
   clearButton: {
     padding: 4,
