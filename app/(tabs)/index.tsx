@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ServicesOverlay } from '@/components/ServicesOverlay';
@@ -502,6 +502,15 @@ export default function HomeScreen() {
           if (annotation.type === 'note') {
             setSelectedAnnotation(annotation);
             setNoteViewerVisible(true);
+          } else if (annotation.type === 'icon') {
+            // Show delete confirmation for icon
+            if (window.confirm('Do you want to remove this icon annotation?')) {
+              removeAnnotation(annotation.id).then(() => {
+                // Reload annotations
+                setIframeLoaded(false);
+                setTimeout(() => setIframeLoaded(true), 50);
+              });
+            }
           }
         });
 
@@ -637,10 +646,40 @@ export default function HomeScreen() {
         const annotations = getAnnotationsForService(serviceType);
         const annotation = annotations.find(a => a.id === data.annotationId);
         
-        if (annotation && annotation.type === 'note') {
-          console.log('✅ Showing note viewer for annotation');
-          setSelectedAnnotation(annotation);
-          setNoteViewerVisible(true);
+        if (annotation) {
+          if (annotation.type === 'note') {
+            console.log('✅ Showing note viewer for annotation');
+            setSelectedAnnotation(annotation);
+            setNoteViewerVisible(true);
+          } else if (annotation.type === 'icon') {
+            console.log('✅ Showing delete confirmation for icon annotation');
+            setSelectedAnnotation(annotation);
+            // Show delete confirmation for icon
+            Alert.alert(
+              'Remove Icon',
+              'Do you want to remove this icon annotation?',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Remove',
+                  style: 'destructive',
+                  onPress: async () => {
+                    await removeAnnotation(data.annotationId);
+                    // Reload annotations
+                    if (Platform.OS === 'web' && iframeRef.current) {
+                      setIframeLoaded(false);
+                      setTimeout(() => setIframeLoaded(true), 50);
+                    } else if (webViewRef.current) {
+                      const annotations = getAnnotationsForService(serviceType);
+                      const { generateAnnotationInjectionScript } = await import('@/lib/annotations-native');
+                      const script = generateAnnotationInjectionScript(annotations);
+                      webViewRef.current.injectJavaScript(script);
+                    }
+                  },
+                },
+              ]
+            );
+          }
         }
       } else {
         console.log('ℹ️ Unhandled message type:', data.type);

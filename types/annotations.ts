@@ -8,7 +8,9 @@ export type IconType =
   | 'gospel-gates'
   | 'gospel-throne'
   | 'bread-bless'
-  | 'bread-distribute';
+  | 'bread-distribute'
+  | 'candles-lit'
+  | 'candles-out';
 
 export interface AnnotationPosition {
   // XPath to locate the element in the DOM
@@ -97,6 +99,18 @@ export const ICON_DEFINITIONS: IconDefinition[] = [
     emoji: '🍞👥',
     label: 'Distribute Bread',
     description: 'Put out blessed bread for parishioners',
+  },
+  {
+    type: 'candles-lit',
+    emoji: '🕯️✨',
+    label: 'Candles Lit',
+    description: 'Light the candles',
+  },
+  {
+    type: 'candles-out',
+    emoji: '🕯️💨',
+    label: 'Candles Out',
+    description: 'Extinguish the candles',
   },
 ];
 
