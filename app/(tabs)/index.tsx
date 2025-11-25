@@ -543,17 +543,39 @@ export default function HomeScreen() {
 
     let longPressTimer: NodeJS.Timeout | null = null;
     let touchStartPos: { x: number; y: number } | null = null;
+    let startEvent: MouseEvent | null = null;
 
-    const handleMouseDown = async (e: MouseEvent) => {
+    const handleMouseDown = (e: MouseEvent) => {
+      // Store the original event
+      startEvent = e;
       touchStartPos = { x: e.clientX, y: e.clientY };
       
+      // Disable text selection during long-press detection
+      iframeDoc.body.style.userSelect = 'none';
+      iframeDoc.body.style.webkitUserSelect = 'none';
+      
       longPressTimer = setTimeout(async () => {
+        // Prevent default to stop text selection
+        if (startEvent) {
+          startEvent.preventDefault();
+        }
+        
         const { getPositionFromEvent } = await import('@/lib/annotations-helper');
-        const position = getPositionFromEvent(iframeDoc, e);
+        const position = getPositionFromEvent(iframeDoc, startEvent!);
         if (position) {
           setPendingAnnotationPosition(position);
           setAnnotationSelectorVisible(true);
+          
+          // Clear any text selection that might have occurred
+          const selection = iframeDoc.getSelection();
+          if (selection) {
+            selection.removeAllRanges();
+          }
         }
+        
+        // Re-enable text selection
+        iframeDoc.body.style.userSelect = '';
+        iframeDoc.body.style.webkitUserSelect = '';
       }, 500);
     };
 
@@ -561,8 +583,13 @@ export default function HomeScreen() {
       if (longPressTimer) {
         clearTimeout(longPressTimer);
         longPressTimer = null;
+        
+        // Re-enable text selection
+        iframeDoc.body.style.userSelect = '';
+        iframeDoc.body.style.webkitUserSelect = '';
       }
       touchStartPos = null;
+      startEvent = null;
     };
 
     const handleMouseMove = (e: MouseEvent) => {
@@ -574,18 +601,35 @@ export default function HomeScreen() {
         if (distance > 10) {
           clearTimeout(longPressTimer);
           longPressTimer = null;
+          
+          // Re-enable text selection
+          iframeDoc.body.style.userSelect = '';
+          iframeDoc.body.style.webkitUserSelect = '';
         }
+      }
+    };
+
+    // Prevent context menu which can interfere with long-press
+    const handleContextMenu = (e: MouseEvent) => {
+      if (longPressTimer) {
+        e.preventDefault();
       }
     };
 
     iframeDoc.addEventListener('mousedown', handleMouseDown as any);
     iframeDoc.addEventListener('mouseup', handleMouseUp);
     iframeDoc.addEventListener('mousemove', handleMouseMove as any);
+    iframeDoc.addEventListener('contextmenu', handleContextMenu as any);
 
     return () => {
       iframeDoc.removeEventListener('mousedown', handleMouseDown as any);
       iframeDoc.removeEventListener('mouseup', handleMouseUp);
       iframeDoc.removeEventListener('mousemove', handleMouseMove as any);
+      iframeDoc.removeEventListener('contextmenu', handleContextMenu as any);
+      
+      // Cleanup: re-enable text selection
+      iframeDoc.body.style.userSelect = '';
+      iframeDoc.body.style.webkitUserSelect = '';
     };
   }, [iframeLoaded]);
 
