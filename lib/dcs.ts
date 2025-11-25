@@ -73,8 +73,8 @@ export async function fetchServicesForDate(isoDate: string): Promise<DcsService[
   const services: DcsService[] = [];
   
   // Parse services using regex (native-compatible, no cheerio)
-  // Match service headers: <tr><td class="index-service-day">Service Title</td></tr>
-  const servicePattern = /<tr[^>]*>\s*<td[^>]*class="[^"]*index-service-day[^"]*"[^>]*>([^<]+)<\/td>/gi;
+  // Match service headers: <tr class='index-service-day-tr'><td...><span class='index-service-day'>Service Title</span></td></tr>
+  const servicePattern = /<tr[^>]*class=['"]index-service-day-tr['"][^>]*>.*?<span[^>]*class=['"]index-service-day['"][^>]*>([^<]+)<\/span>/gi;
   const serviceMatches = Array.from(html.matchAll(servicePattern));
 
   for (let i = 0; i < serviceMatches.length; i++) {
@@ -92,25 +92,26 @@ export async function fetchServicesForDate(isoDate: string): Promise<DcsService[
     const serviceSection = html.substring(startPos, endPos);
 
     // Match resource rows within this service section
-    // Pattern: <td class="index-language">EN</td>...<a class="index-file-link" href="...">view</a>
-    const rowPattern = /<tr[^>]*>(.*?)<\/tr>/gis;
+    // Pattern: <tr class='index-service-language-tr'><td...><span class='index-language'>EN</span></td><td...><a class='index-file-link' href='...'>View</a></td></tr>
+    const rowPattern = /<tr[^>]*class=['"]index-service-language-tr['"][^>]*>(.*?)<\/tr>/gis;
     const rows = Array.from(serviceSection.matchAll(rowPattern));
 
     for (const row of rows) {
       const rowHtml = row[1];
       
-      // Extract language
-      const langMatch = rowHtml.match(/class="[^"]*index-language[^"]*">([^<]+)</i);
+      // Extract language from <span class='index-language'>
+      const langMatch = rowHtml.match(/<span[^>]*class=['"]index-language['"][^>]*>([^<]+)<\/span>/i);
       if (!langMatch) continue;
       const languageCode = langMatch[1].trim();
 
-      // Extract link with "view" text
-      const linkMatch = rowHtml.match(/<a[^>]*class="[^"]*index-file-link[^"]*"[^>]*href="([^"]+)"[^>]*>([^<]+)<\/a>/i);
+      // Extract link with "view" text from <a class='index-file-link'>
+      const linkMatch = rowHtml.match(/<a[^>]*class=['"]index-file-link['"][^>]*href=['"]([^'"]+)['"][^>]*>([^<]+)<\/a>/i);
       if (!linkMatch) continue;
       
       const href = linkMatch[1];
       const linkText = linkMatch[2].trim();
       
+      // Only include "View" links (not "Print" links)
       if (/view/i.test(linkText)) {
         const absoluteUrl = toAbsoluteUrl(pageUrl, href);
         resources.push({
