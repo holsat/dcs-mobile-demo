@@ -1,24 +1,57 @@
 import React from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ServicesOverlay } from '@/components/ServicesOverlay';
 import { useServices } from '@/contexts/ServicesContext';
+
+// Import fetchHtml for web platform content loading
+const fetchHtml = Platform.OS === 'web' ? require('@/lib/dcs').fetchHtml : null;
 
 // WebView is only available on native platforms (iOS/Android)
 const WebView = Platform.OS !== 'web' ? require('react-native-webview').WebView : null;
 
 export default function HomeScreen() {
   const { selectedResource, openOverlay } = useServices();
+  const [htmlContent, setHtmlContent] = React.useState<string | null>(null);
+  const [isLoadingHtml, setIsLoadingHtml] = React.useState(false);
+  const [loadError, setLoadError] = React.useState<string | null>(null);
 
-  // On web platform, we need to proxy the service content URL through CORS proxy
-  const displayUrl = React.useMemo(() => {
-    if (!selectedResource) return null;
-    if (Platform.OS === 'web') {
-      // Use the same CORS proxy for consistency
-      return `https://api.allorigins.win/raw?url=${encodeURIComponent(selectedResource.url)}`;
+  // On web platform, fetch the HTML content using our robust fetchHtml function
+  React.useEffect(() => {
+    if (!selectedResource || Platform.OS !== 'web') {
+      setHtmlContent(null);
+      setLoadError(null);
+      return;
     }
-    return selectedResource.url;
+
+    let cancelled = false;
+
+    async function loadContent() {
+      setIsLoadingHtml(true);
+      setLoadError(null);
+      try {
+        const html = await fetchHtml(selectedResource.url);
+        if (!cancelled) {
+          setHtmlContent(html);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Failed to load service content:', error);
+          setLoadError('Unable to load service content. Please try again later.');
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingHtml(false);
+        }
+      }
+    }
+
+    loadContent();
+
+    return () => {
+      cancelled = true;
+    };
   }, [selectedResource]);
 
   return (
@@ -59,21 +92,36 @@ export default function HomeScreen() {
         )}
 
         <View style={styles.viewer}>
-          {displayUrl ? (
+          {selectedResource ? (
             Platform.OS === 'web' ? (
-              <iframe
-                src={displayUrl}
-                style={{
-                  flex: 1,
-                  border: 'none',
-                  width: '100%',
-                  height: '100%',
-                }}
-                title="Service Content"
-              />
+              isLoadingHtml ? (
+                <View style={styles.viewerPlaceholder}>
+                  <ActivityIndicator size="large" color="#1d4ed8" />
+                  <Text style={[styles.viewerPlaceholderText, { marginTop: 12 }]}>
+                    Loading service content...
+                  </Text>
+                </View>
+              ) : loadError ? (
+                <View style={styles.viewerPlaceholder}>
+                  <Text style={[styles.viewerPlaceholderText, { color: '#dc2626' }]}>
+                    {loadError}
+                  </Text>
+                </View>
+              ) : htmlContent ? (
+                <iframe
+                  srcDoc={htmlContent}
+                  style={{
+                    flex: 1,
+                    border: 'none',
+                    width: '100%',
+                    height: '100%',
+                  }}
+                  title="Service Content"
+                />
+              ) : null
             ) : (
               <WebView
-                source={{ uri: displayUrl }}
+                source={{ uri: selectedResource.url }}
                 startInLoadingState
                 style={styles.webview}
               />
