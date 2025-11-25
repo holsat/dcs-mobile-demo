@@ -141,28 +141,41 @@ export function generateAnnotationInjectionScript(annotations: Annotation[]): st
 export function generateLongPressListenerScript(): string {
   return `
     (function() {
-      console.log('🎯 DCS Long-press annotation listener installed');
+      // Helper to log via postMessage so we can see it in Metro logs
+      function log(message, data) {
+        try {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: message,
+            data: data
+          }));
+        } catch (e) {
+          console.log(message, data);
+        }
+      }
+      
+      log('🎯 DCS Long-press annotation listener installed');
       let longPressTimer = null;
       let touchStartPos = null;
       
       document.addEventListener('touchstart', function(e) {
-        console.log('👆 Touch start detected');
+        log('👆 Touch start detected');
         if (e.touches.length === 1) {
           const touch = e.touches[0];
           touchStartPos = { x: touch.clientX, y: touch.clientY };
-          console.log('⏱️ Starting long-press timer (300ms)...');
+          log('⏱️ Starting long-press timer (300ms)...');
           
           longPressTimer = setTimeout(function() {
-            console.log('✅ Long press detected! Getting position...');
+            log('✅ Long press detected! Getting position...');
             
             // Get position information
             const range = document.caretRangeFromPoint(touch.clientX, touch.clientY);
             if (!range) {
-              console.log('❌ Could not get range from point');
+              log('❌ Could not get range from point');
               return;
             }
             
-            console.log('✅ Got range:', range);
+            log('✅ Got range');
             const node = range.startContainer;
             const offset = range.startOffset;
             

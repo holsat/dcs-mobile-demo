@@ -592,14 +592,22 @@ export default function HomeScreen() {
   // Setup long-press listener for native
   React.useEffect(() => {
     if (Platform.OS === 'web' || !webViewRef.current) {
+      console.log('❌ Not injecting long-press listener:', { 
+        platform: Platform.OS, 
+        hasWebViewRef: !!webViewRef.current 
+      });
       return;
     }
+
+    console.log('✅ Injecting long-press listener script for native...');
 
     // Inject long-press listener script
     const injectLongPressListener = async () => {
       const { generateLongPressListenerScript } = await import('@/lib/annotations-native');
       const script = generateLongPressListenerScript();
+      console.log('📤 About to inject script (length:', script.length, 'chars)');
       webViewRef.current?.injectJavaScript(script);
+      console.log('✅ Script injection called');
     };
 
     injectLongPressListener();
@@ -614,6 +622,13 @@ export default function HomeScreen() {
 
     try {
       const data = JSON.parse(event.nativeEvent.data);
+      
+      // Handle log messages from WebView
+      if (data.type === 'log') {
+        console.log('[WebView]', data.message, data.data || '');
+        return;
+      }
+      
       console.log('📦 Parsed data:', data);
       
       if (data.type === 'longPress' && data.position) {
