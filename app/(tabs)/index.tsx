@@ -40,6 +40,7 @@ export default function HomeScreen() {
   const [pendingAnnotationPosition, setPendingAnnotationPosition] = React.useState<AnnotationPosition | null>(null);
   const [noteViewerVisible, setNoteViewerVisible] = React.useState(false);
   const [selectedAnnotation, setSelectedAnnotation] = React.useState<Annotation | null>(null);
+  const [annotationMode, setAnnotationMode] = React.useState(false);
 
   // On web platform, fetch the HTML content using dynamic import to avoid bundling cheerio on native
   React.useEffect(() => {
@@ -532,106 +533,39 @@ export default function HomeScreen() {
     return () => clearTimeout(timer);
   }, [selectedResource, getAnnotationsForService]);
 
-  // Setup long-press listener for web
+  // Setup click listener for web when in annotation mode
   React.useEffect(() => {
-    if (Platform.OS !== 'web' || !iframeLoaded || !iframeRef.current) {
+    if (Platform.OS !== 'web' || !iframeLoaded || !iframeRef.current || !annotationMode) {
       return;
     }
 
     const iframeDoc = iframeRef.current.contentDocument;
     if (!iframeDoc) return;
 
-    let longPressTimer: NodeJS.Timeout | null = null;
-    let touchStartPos: { x: number; y: number } | null = null;
-    let startEvent: MouseEvent | null = null;
+    const handleClick = async (e: MouseEvent) => {
+      // Don't trigger if clicking on an existing annotation marker
+      const target = e.target as HTMLElement;
+      if (target.classList.contains('dcs-annotation')) {
+        return;
+      }
 
-    const handleMouseDown = (e: MouseEvent) => {
-      // Store the original event
-      startEvent = e;
-      touchStartPos = { x: e.clientX, y: e.clientY };
+      e.preventDefault();
+      e.stopPropagation();
       
-      // Disable text selection during long-press detection
-      iframeDoc.body.style.userSelect = 'none';
-      iframeDoc.body.style.webkitUserSelect = 'none';
-      
-      longPressTimer = setTimeout(async () => {
-        // Prevent default to stop text selection
-        if (startEvent) {
-          startEvent.preventDefault();
-        }
-        
-        const { getPositionFromEvent } = await import('@/lib/annotations-helper');
-        const position = getPositionFromEvent(iframeDoc, startEvent!);
-        if (position) {
-          setPendingAnnotationPosition(position);
-          setAnnotationSelectorVisible(true);
-          
-          // Clear any text selection that might have occurred
-          const selection = iframeDoc.getSelection();
-          if (selection) {
-            selection.removeAllRanges();
-          }
-        }
-        
-        // Re-enable text selection
-        iframeDoc.body.style.userSelect = '';
-        iframeDoc.body.style.webkitUserSelect = '';
-      }, 500);
-    };
-
-    const handleMouseUp = () => {
-      if (longPressTimer) {
-        clearTimeout(longPressTimer);
-        longPressTimer = null;
-        
-        // Re-enable text selection
-        iframeDoc.body.style.userSelect = '';
-        iframeDoc.body.style.webkitUserSelect = '';
-      }
-      touchStartPos = null;
-      startEvent = null;
-    };
-
-    const handleMouseMove = (e: MouseEvent) => {
-      if (touchStartPos && longPressTimer) {
-        const dx = e.clientX - touchStartPos.x;
-        const dy = e.clientY - touchStartPos.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        
-        if (distance > 10) {
-          clearTimeout(longPressTimer);
-          longPressTimer = null;
-          
-          // Re-enable text selection
-          iframeDoc.body.style.userSelect = '';
-          iframeDoc.body.style.webkitUserSelect = '';
-        }
+      const { getPositionFromEvent } = await import('@/lib/annotations-helper');
+      const position = getPositionFromEvent(iframeDoc, e);
+      if (position) {
+        setPendingAnnotationPosition(position);
+        setAnnotationSelectorVisible(true);
       }
     };
 
-    // Prevent context menu which can interfere with long-press
-    const handleContextMenu = (e: MouseEvent) => {
-      if (longPressTimer) {
-        e.preventDefault();
-      }
-    };
-
-    iframeDoc.addEventListener('mousedown', handleMouseDown as any);
-    iframeDoc.addEventListener('mouseup', handleMouseUp);
-    iframeDoc.addEventListener('mousemove', handleMouseMove as any);
-    iframeDoc.addEventListener('contextmenu', handleContextMenu as any);
+    iframeDoc.addEventListener('click', handleClick as any, true);
 
     return () => {
-      iframeDoc.removeEventListener('mousedown', handleMouseDown as any);
-      iframeDoc.removeEventListener('mouseup', handleMouseUp);
-      iframeDoc.removeEventListener('mousemove', handleMouseMove as any);
-      iframeDoc.removeEventListener('contextmenu', handleContextMenu as any);
-      
-      // Cleanup: re-enable text selection
-      iframeDoc.body.style.userSelect = '';
-      iframeDoc.body.style.webkitUserSelect = '';
+      iframeDoc.removeEventListener('click', handleClick as any, true);
     };
-  }, [iframeLoaded]);
+  }, [iframeLoaded, annotationMode]);
 
   // Setup long-press listener for native
   React.useEffect(() => {
@@ -767,8 +701,14 @@ export default function HomeScreen() {
             <Text style={styles.toolbarTitle} numberOfLines={1}>
               {selectedResource.serviceTitle}
             </Text>
+            <Pressable 
+              style={[styles.toolbarButton, annotationMode && styles.toolbarButtonActive]} 
+              onPress={() => setAnnotationMode(!annotationMode)}
+            >
+              <Text style={styles.toolbarButtonText}>📌 {annotationMode ? 'Done' : 'Note'}</Text>
+            </Pressable>
             <Pressable style={styles.toolbarButton} onPress={toggleSearch}>
-              <Text style={styles.toolbarButtonText}>🔍 Search</Text>
+              <Text style={styles.toolbarButtonText}>🔍</Text>
             </Pressable>
           </View>
         ) : (
@@ -937,6 +877,9 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 8,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  toolbarButtonActive: {
+    backgroundColor: '#facc15',
   },
   toolbarButtonText: {
     color: '#ffffff',
