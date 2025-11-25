@@ -22,7 +22,18 @@ const CORS_PROXIES: Array<(url: string) => string> = [
 function toAbsoluteUrl(baseUrl: string, href: string | undefined): string | null {
   if (!href) return null;
   try {
-    return new URL(href, baseUrl).toString();
+    // The DCS index pages have <base href='../'/> 
+    // So we need to resolve relative URLs from the parent directory
+    // baseUrl example: https://dcs.goarch.org/goa/dcs/indexes/20251125.html
+    // We need: https://dcs.goarch.org/goa/dcs/
+    const baseUrlObj = new URL(baseUrl);
+    const pathParts = baseUrlObj.pathname.split('/');
+    // Remove the file name and the 'indexes' directory
+    pathParts.pop(); // Remove '20251125.html'
+    pathParts.pop(); // Remove 'indexes'
+    baseUrlObj.pathname = pathParts.join('/') + '/';
+    
+    return new URL(href, baseUrlObj.toString()).toString();
   } catch (error) {
     return null;
   }
