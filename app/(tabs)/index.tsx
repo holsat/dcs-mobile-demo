@@ -16,6 +16,8 @@ export default function HomeScreen() {
   const [searchVisible, setSearchVisible] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
   const iframeRef = React.useRef<HTMLIFrameElement>(null);
+  const webViewRef = React.useRef<any>(null);
+  const [canGoBack, setCanGoBack] = React.useState(false);
 
   // On web platform, fetch the HTML content using dynamic import to avoid bundling cheerio on native
   React.useEffect(() => {
@@ -57,9 +59,17 @@ export default function HomeScreen() {
   }, [selectedResource]);
 
   const handleBack = () => {
-    clearSelectedResource();
-    setSearchVisible(false);
-    setSearchQuery('');
+    if (Platform.OS === 'web') {
+      // Navigate back in iframe history
+      if (iframeRef.current?.contentWindow) {
+        iframeRef.current.contentWindow.history.back();
+      }
+    } else {
+      // Navigate back in WebView history
+      if (webViewRef.current) {
+        webViewRef.current.goBack();
+      }
+    }
   };
 
   const toggleSearch = () => {
@@ -191,9 +201,13 @@ export default function HomeScreen() {
               ) : null
             ) : (
               <WebView
+                ref={webViewRef}
                 source={{ uri: selectedResource.url }}
                 startInLoadingState
                 style={styles.webview}
+                onNavigationStateChange={(navState: any) => {
+                  setCanGoBack(navState.canGoBack);
+                }}
               />
             )
           ) : (
