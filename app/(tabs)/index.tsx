@@ -589,8 +589,8 @@ export default function HomeScreen() {
     };
   }, [iframeLoaded, annotationMode]);
 
-  // Setup long-press listener for native
-  React.useEffect(() => {
+  // Handler to inject long-press script after WebView loads
+  const handleWebViewLoad = async () => {
     if (Platform.OS === 'web' || !webViewRef.current) {
       console.log('❌ Not injecting long-press listener:', { 
         platform: Platform.OS, 
@@ -599,19 +599,15 @@ export default function HomeScreen() {
       return;
     }
 
-    console.log('✅ Injecting long-press listener script for native...');
+    console.log('✅ WebView loaded, injecting long-press listener script...');
 
     // Inject long-press listener script
-    const injectLongPressListener = async () => {
-      const { generateLongPressListenerScript } = await import('@/lib/annotations-native');
-      const script = generateLongPressListenerScript();
-      console.log('📤 About to inject script (length:', script.length, 'chars)');
-      webViewRef.current?.injectJavaScript(script);
-      console.log('✅ Script injection called');
-    };
-
-    injectLongPressListener();
-  }, [selectedResource]);
+    const { generateLongPressListenerScript } = await import('@/lib/annotations-native');
+    const script = generateLongPressListenerScript();
+    console.log('📤 About to inject script (length:', script.length, 'chars)');
+    webViewRef.current?.injectJavaScript(script);
+    console.log('✅ Script injection called');
+  };
 
   // Enhanced WebView message handler for annotations
   const handleWebViewMessageWithAnnotations = (event: any) => {
@@ -857,6 +853,7 @@ export default function HomeScreen() {
                 onNavigationStateChange={(navState: any) => {
                   setCanGoBack(navState.canGoBack);
                 }}
+                onLoadEnd={handleWebViewLoad}
                 onMessage={handleWebViewMessageWithAnnotations}
               />
             )
