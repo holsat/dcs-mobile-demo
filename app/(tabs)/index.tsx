@@ -3,13 +3,25 @@ import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, TextInput, Vi
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ServicesOverlay } from '@/components/ServicesOverlay';
+import { AnnotationSelector } from '@/components/AnnotationSelector';
+import { NoteViewer } from '@/components/NoteViewer';
 import { useServices } from '@/contexts/ServicesContext';
+import { useAnnotations } from '@/contexts/AnnotationsContext';
+import { ICON_DEFINITIONS, NOTE_EMOJI, type IconType, type Annotation, type AnnotationPosition } from '@/types/annotations';
 
 // WebView is only available on native platforms (iOS/Android)
 const WebView = Platform.OS !== 'web' ? require('react-native-webview').WebView : null;
 
 export default function HomeScreen() {
   const { selectedResource, openOverlay, clearSelectedResource } = useServices();
+  const { 
+    getAnnotationsForService, 
+    addIconAnnotation, 
+    addNoteAnnotation, 
+    updateNoteAnnotation, 
+    removeAnnotation 
+  } = useAnnotations();
+  
   const [htmlContent, setHtmlContent] = React.useState<string | null>(null);
   const [isLoadingHtml, setIsLoadingHtml] = React.useState(false);
   const [loadError, setLoadError] = React.useState<string | null>(null);
@@ -22,6 +34,12 @@ export default function HomeScreen() {
   const [currentMatchIndex, setCurrentMatchIndex] = React.useState(0);
   const matchElementsRef = React.useRef<HTMLElement[]>([]);
   const [iframeLoaded, setIframeLoaded] = React.useState(false);
+  
+  // Annotation state
+  const [annotationSelectorVisible, setAnnotationSelectorVisible] = React.useState(false);
+  const [pendingAnnotationPosition, setPendingAnnotationPosition] = React.useState<AnnotationPosition | null>(null);
+  const [noteViewerVisible, setNoteViewerVisible] = React.useState(false);
+  const [selectedAnnotation, setSelectedAnnotation] = React.useState<Annotation | null>(null);
 
   // On web platform, fetch the HTML content using dynamic import to avoid bundling cheerio on native
   React.useEffect(() => {
@@ -426,6 +444,273 @@ export default function HomeScreen() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
+  // ==================== ANNOTATIONS LOGIC ====================
+  
+  // Get service type from selected resource
+  const getServiceType = (): string => {
+    if (!selectedResource) return '';
+    // Extract service type from title (e.g., "Matins", "Vespers", etc.)
+    return selectedResource.serviceTitle;
+  };
+
+  // Load and inject annotations when content loads (WEB)
+  React.useEffect(() => {
+    if (Platform.OS !== 'web' || !iframeLoaded || !iframeRef.current || !selectedResource) {
+      return;
+    }
+
+    const serviceType = getServiceType();
+    const annotations = getAnnotationsForService(serviceType);
+    
+    // Inject annotations into iframe
+    const injectAnnotations = async () => {
+      const iframeDoc = iframeRef.current?.contentDocument;
+      if (!iframeDoc) return;
+
+      // Import helper functions dynamically
+      const { 
+        createAnnotationMarker, 
+        insertAnnotationMarker, 
+        removeAllAnnotationMarkers 
+      } = await import('@/lib/annotations-helper');
+
+      // Remove existing annotations
+      removeAllAnnotationMarkers(iframeDoc);
+
+      // Insert each annotation
+      annotations.forEach((annotation) => {
+        const iconDef = annotation.type === 'icon' && annotation.iconType
+          ? ICON_DEFINITIONS.find(d => d.type === annotation.iconType)
+          : null;
+        
+        const emoji = annotation.type === 'note' 
+          ? NOTE_EMOJI 
+          : (iconDef?.emoji || '🔖');
+
+        const marker = createAnnotationMarker(
+          iframeDoc,
+          annotation.id,
+          emoji,
+          annotation.type
+        );
+
+        // Add click handler
+        marker.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (annotation.type === 'note') {
+            setSelectedAnnotation(annotation);
+            setNoteViewerVisible(true);
+          }
+        });
+
+        insertAnnotationMarker(iframeDoc, annotation.position, marker);
+      });
+    };
+
+    injectAnnotations();
+  }, [iframeLoaded, selectedResource, getAnnotationsForService]);
+
+  // Load and inject annotations when content loads (NATIVE)
+  React.useEffect(() => {
+    if (Platform.OS === 'web' || !webViewRef.current || !selectedResource) {
+      return;
+    }
+
+    const serviceType = getServiceType();
+    const annotations = getAnnotationsForService(serviceType);
+
+    // Inject annotations into WebView
+    const injectAnnotations = async () => {
+      const { generateAnnotationInjectionScript } = await import('@/lib/annotations-native');
+      const script = generateAnnotationInjectionScript(annotations);
+      webViewRef.current?.injectJavaScript(script);
+    };
+
+    // Small delay to ensure content is loaded
+    const timer = setTimeout(injectAnnotations, 500);
+    return () => clearTimeout(timer);
+  }, [selectedResource, getAnnotationsForService]);
+
+  // Setup long-press listener for web
+  React.useEffect(() => {
+    if (Platform.OS !== 'web' || !iframeLoaded || !iframeRef.current) {
+      return;
+    }
+
+    const iframeDoc = iframeRef.current.contentDocument;
+    if (!iframeDoc) return;
+
+    let longPressTimer: NodeJS.Timeout | null = null;
+    let touchStartPos: { x: number; y: number } | null = null;
+
+    const handleMouseDown = async (e: MouseEvent) => {
+      touchStartPos = { x: e.clientX, y: e.clientY };
+      
+      longPressTimer = setTimeout(async () => {
+        const { getPositionFromEvent } = await import('@/lib/annotations-helper');
+        const position = getPositionFromEvent(iframeDoc, e);
+        if (position) {
+          setPendingAnnotationPosition(position);
+          setAnnotationSelectorVisible(true);
+        }
+      }, 500);
+    };
+
+    const handleMouseUp = () => {
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+      touchStartPos = null;
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (touchStartPos && longPressTimer) {
+        const dx = e.clientX - touchStartPos.x;
+        const dy = e.clientY - touchStartPos.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (distance > 10) {
+          clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+      }
+    };
+
+    iframeDoc.addEventListener('mousedown', handleMouseDown as any);
+    iframeDoc.addEventListener('mouseup', handleMouseUp);
+    iframeDoc.addEventListener('mousemove', handleMouseMove as any);
+
+    return () => {
+      iframeDoc.removeEventListener('mousedown', handleMouseDown as any);
+      iframeDoc.removeEventListener('mouseup', handleMouseUp);
+      iframeDoc.removeEventListener('mousemove', handleMouseMove as any);
+    };
+  }, [iframeLoaded]);
+
+  // Setup long-press listener for native
+  React.useEffect(() => {
+    if (Platform.OS === 'web' || !webViewRef.current) {
+      return;
+    }
+
+    // Inject long-press listener script
+    const injectLongPressListener = async () => {
+      const { generateLongPressListenerScript } = await import('@/lib/annotations-native');
+      const script = generateLongPressListenerScript();
+      webViewRef.current?.injectJavaScript(script);
+    };
+
+    injectLongPressListener();
+  }, [selectedResource]);
+
+  // Enhanced WebView message handler for annotations
+  const handleWebViewMessageWithAnnotations = (event: any) => {
+    // Call existing handler first
+    handleWebViewMessage(event);
+
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+      
+      if (data.type === 'longPress' && data.position) {
+        setPendingAnnotationPosition(data.position);
+        setAnnotationSelectorVisible(true);
+      } else if (data.type === 'annotationClick' && data.annotationId) {
+        const serviceType = getServiceType();
+        const annotations = getAnnotationsForService(serviceType);
+        const annotation = annotations.find(a => a.id === data.annotationId);
+        
+        if (annotation && annotation.type === 'note') {
+          setSelectedAnnotation(annotation);
+          setNoteViewerVisible(true);
+        }
+      }
+    } catch (error) {
+      console.error('Error parsing annotation WebView message:', error);
+    }
+  };
+
+  // Handle annotation icon selection
+  const handleSelectIcon = async (iconType: IconType) => {
+    if (!pendingAnnotationPosition) return;
+    
+    const serviceType = getServiceType();
+    await addIconAnnotation(serviceType, iconType, pendingAnnotationPosition);
+    
+    // Reload annotations
+    if (Platform.OS === 'web' && iframeRef.current) {
+      // Trigger re-render by updating a state
+      setIframeLoaded(false);
+      setTimeout(() => setIframeLoaded(true), 50);
+    } else if (webViewRef.current) {
+      // Reinject for native
+      const annotations = getAnnotationsForService(serviceType);
+      const { generateAnnotationInjectionScript } = await import('@/lib/annotations-native');
+      const script = generateAnnotationInjectionScript(annotations);
+      webViewRef.current.injectJavaScript(script);
+    }
+  };
+
+  // Handle note creation
+  const handleCreateNote = async (noteText: string) => {
+    if (!pendingAnnotationPosition) return;
+    
+    const serviceType = getServiceType();
+    await addNoteAnnotation(serviceType, noteText, pendingAnnotationPosition);
+    
+    // Reload annotations (same as icon)
+    if (Platform.OS === 'web' && iframeRef.current) {
+      setIframeLoaded(false);
+      setTimeout(() => setIframeLoaded(true), 50);
+    } else if (webViewRef.current) {
+      const annotations = getAnnotationsForService(serviceType);
+      const { generateAnnotationInjectionScript } = await import('@/lib/annotations-native');
+      const script = generateAnnotationInjectionScript(annotations);
+      webViewRef.current.injectJavaScript(script);
+    }
+  };
+
+  // Handle note update
+  const handleUpdateNote = async (newText: string) => {
+    if (!selectedAnnotation) return;
+    
+    await updateNoteAnnotation(selectedAnnotation.id, newText);
+    
+    // Reload annotations
+    const serviceType = getServiceType();
+    if (Platform.OS === 'web' && iframeRef.current) {
+      setIframeLoaded(false);
+      setTimeout(() => setIframeLoaded(true), 50);
+    } else if (webViewRef.current) {
+      const annotations = getAnnotationsForService(serviceType);
+      const { generateAnnotationInjectionScript } = await import('@/lib/annotations-native');
+      const script = generateAnnotationInjectionScript(annotations);
+      webViewRef.current.injectJavaScript(script);
+    }
+  };
+
+  // Handle annotation deletion
+  const handleDeleteAnnotation = async () => {
+    if (!selectedAnnotation) return;
+    
+    await removeAnnotation(selectedAnnotation.id);
+    
+    // Reload annotations
+    const serviceType = getServiceType();
+    if (Platform.OS === 'web' && iframeRef.current) {
+      setIframeLoaded(false);
+      setTimeout(() => setIframeLoaded(true), 50);
+    } else if (webViewRef.current) {
+      const annotations = getAnnotationsForService(serviceType);
+      const { generateAnnotationInjectionScript } = await import('@/lib/annotations-native');
+      const script = generateAnnotationInjectionScript(annotations);
+      webViewRef.current.injectJavaScript(script);
+    }
+  };
+
+  // ==================== END ANNOTATIONS LOGIC ====================
+
   return (
     <View style={styles.root}>
       <SafeAreaView style={styles.safe}>
@@ -541,7 +826,7 @@ export default function HomeScreen() {
                 onNavigationStateChange={(navState: any) => {
                   setCanGoBack(navState.canGoBack);
                 }}
-                onMessage={handleWebViewMessage}
+                onMessage={handleWebViewMessageWithAnnotations}
               />
             )
           ) : (
@@ -552,6 +837,28 @@ export default function HomeScreen() {
         </View>
       </SafeAreaView>
       <ServicesOverlay />
+      
+      {/* Annotation Modals */}
+      <AnnotationSelector
+        visible={annotationSelectorVisible}
+        onClose={() => {
+          setAnnotationSelectorVisible(false);
+          setPendingAnnotationPosition(null);
+        }}
+        onSelectIcon={handleSelectIcon}
+        onCreateNote={handleCreateNote}
+      />
+      
+      <NoteViewer
+        visible={noteViewerVisible}
+        noteText={selectedAnnotation?.noteText || ''}
+        onClose={() => {
+          setNoteViewerVisible(false);
+          setSelectedAnnotation(null);
+        }}
+        onUpdate={handleUpdateNote}
+        onDelete={handleDeleteAnnotation}
+      />
     </View>
   );
 }
