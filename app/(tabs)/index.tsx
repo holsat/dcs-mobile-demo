@@ -490,7 +490,7 @@ export default function HomeScreen() {
           <View style={styles.placeholder}>
             <Text style={styles.placeholderTitle}>Select a Service</Text>
             <Text style={styles.placeholderText}>
-              Tap the Services tab below to choose a date and load chant resources from the GOA DCS.
+              Tap the Services calendar icon below to choose a date and load the DCS resources for that day.
             </Text>
           </View>
         ) : null}
