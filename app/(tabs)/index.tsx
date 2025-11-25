@@ -1,98 +1,179 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import React from 'react';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+import { ServicesOverlay } from '@/components/ServicesOverlay';
+import { useServices } from '@/contexts/ServicesContext';
+
+// WebView is only available on native platforms (iOS/Android)
+const WebView = Platform.OS !== 'web' ? require('react-native-webview').WebView : null;
 
 export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+  const { selectedResource, openOverlay } = useServices();
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+  return (
+    <View style={styles.root}>
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.heading}>GOA Digital Chant Stand</Text>
+            <Text style={styles.subHeading}>Mobile Services Viewer</Text>
+          </View>
+          <Pressable style={styles.actionButton} onPress={openOverlay}>
+            <Text style={styles.actionButtonText}>Services</Text>
+          </Pressable>
+        </View>
+
+        {selectedResource ? (
+          <View style={styles.metaPanel}>
+            <View>
+              <Text style={styles.metaLabel}>Service</Text>
+              <Text style={styles.metaValue}>{selectedResource.serviceTitle}</Text>
+            </View>
+            <View>
+              <Text style={styles.metaLabel}>Language</Text>
+              <Text style={styles.metaValue}>{selectedResource.language}</Text>
+            </View>
+            <View>
+              <Text style={styles.metaLabel}>Date</Text>
+              <Text style={styles.metaValue}>{selectedResource.date}</Text>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.placeholder}>
+            <Text style={styles.placeholderTitle}>Select a Service</Text>
+            <Text style={styles.placeholderText}>
+              Tap the Services tab below to choose a date and load chant resources from the GOA DCS.
+            </Text>
+          </View>
+        )}
+
+        <View style={styles.viewer}>
+          {selectedResource ? (
+            Platform.OS === 'web' ? (
+              <iframe
+                src={selectedResource.url}
+                style={{
+                  flex: 1,
+                  border: 'none',
+                  width: '100%',
+                  height: '100%',
+                }}
+                title="Service Content"
+              />
+            ) : (
+              <WebView
+                source={{ uri: selectedResource.url }}
+                startInLoadingState
+                style={styles.webview}
+              />
+            )
+          ) : (
+            <View style={styles.viewerPlaceholder}>
+              <Text style={styles.viewerPlaceholderText}>Service content will appear here.</Text>
+            </View>
+          )}
+        </View>
+      </SafeAreaView>
+      <ServicesOverlay />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
+  root: {
+    flex: 1,
+    backgroundColor: '#f1f5f9',
+  },
+  safe: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'space-between',
+    paddingVertical: 16,
   },
-  stepContainer: {
-    gap: 8,
+  heading: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  subHeading: {
+    fontSize: 14,
+    color: '#475569',
+    marginTop: 4,
+  },
+  actionButton: {
+    backgroundColor: '#1d4ed8',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 999,
+  },
+  actionButtonText: {
+    color: '#ffffff',
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  metaPanel: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    borderRadius: 16,
+    backgroundColor: '#e2e8f0',
+    padding: 16,
+    marginBottom: 16,
+  },
+  metaLabel: {
+    fontSize: 12,
+    color: '#475569',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  metaValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0f172a',
+  },
+  placeholder: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 16,
+  },
+  placeholderTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#0f172a',
     marginBottom: 8,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  placeholderText: {
+    fontSize: 15,
+    color: '#475569',
+    lineHeight: 20,
+  },
+  viewer: {
+    flex: 1,
+    borderRadius: 18,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#cbd5f5',
+    backgroundColor: '#fff',
+  },
+  webview: {
+    flex: 1,
+  },
+  viewerPlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  viewerPlaceholderText: {
+    fontSize: 16,
+    color: '#94a3b8',
+    textAlign: 'center',
   },
 });
