@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import {
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -52,8 +54,12 @@ export function AnnotationSelector({
       transparent
       onRequestClose={handleClose}
     >
-      <Pressable style={styles.overlay} onPress={handleClose}>
-        <Pressable style={styles.container} onPress={(e) => e.stopPropagation()}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardAvoid}
+      >
+        <Pressable style={styles.overlay} onPress={handleClose}>
+          <Pressable style={styles.container} onPress={(e) => e.stopPropagation()}>
           {mode === 'choose' && (
             <>
               <Text style={styles.title}>Add Annotation</Text>
@@ -146,11 +152,15 @@ export function AnnotationSelector({
           )}
         </Pressable>
       </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  keyboardAvoid: {
+    flex: 1,
+  },
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',

@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import {
   Alert,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -66,79 +69,91 @@ export function NoteViewer({
       transparent
       onRequestClose={handleClose}
     >
-      <Pressable style={styles.overlay} onPress={handleClose}>
-        <Pressable style={styles.container} onPress={(e) => e.stopPropagation()}>
-          <View style={styles.header}>
-            <Text style={styles.title}>📝 Note</Text>
-            {!isEditing && (
-              <Pressable onPress={() => setIsEditing(true)}>
-                <Text style={styles.editButton}>Edit</Text>
-              </Pressable>
-            )}
-          </View>
-
-          {isEditing ? (
-            <>
-              <TextInput
-                style={styles.noteInput}
-                value={editedText}
-                onChangeText={setEditedText}
-                multiline
-                numberOfLines={6}
-                autoFocus
-                textAlignVertical="top"
-              />
-
-              <View style={styles.buttonGroup}>
-                <Pressable
-                  style={[styles.button, styles.cancelButton]}
-                  onPress={() => {
-                    setIsEditing(false);
-                    setEditedText(noteText);
-                  }}
-                >
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                </Pressable>
-
-                <Pressable
-                  style={[styles.button, styles.saveButton]}
-                  onPress={handleSave}
-                  disabled={!editedText.trim()}
-                >
-                  <Text style={styles.saveButtonText}>Save</Text>
-                </Pressable>
-              </View>
-            </>
-          ) : (
-            <>
-              <View style={styles.noteContent}>
-                <Text style={styles.noteText}>{noteText}</Text>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardAvoid}
+      >
+        <Pressable style={styles.overlay} onPress={handleClose}>
+          <Pressable style={styles.container} onPress={(e) => e.stopPropagation()}>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={styles.header}>
+                <Text style={styles.title}>📝 Note</Text>
+                {!isEditing && (
+                  <Pressable onPress={() => setIsEditing(true)}>
+                    <Text style={styles.editButton}>Edit</Text>
+                  </Pressable>
+                )}
               </View>
 
-              <View style={styles.buttonGroup}>
-                <Pressable
-                  style={[styles.button, styles.deleteButton]}
-                  onPress={handleDelete}
-                >
-                  <Text style={styles.deleteButtonText}>Delete Note</Text>
-                </Pressable>
+              {isEditing ? (
+                <>
+                  <TextInput
+                    style={styles.noteInput}
+                    value={editedText}
+                    onChangeText={setEditedText}
+                    multiline
+                    numberOfLines={6}
+                    autoFocus
+                    textAlignVertical="top"
+                    placeholder="Enter your note here..."
+                    placeholderTextColor="#94a3b8"
+                  />
 
-                <Pressable
-                  style={[styles.button, styles.closeButton]}
-                  onPress={handleClose}
-                >
-                  <Text style={styles.closeButtonText}>Close</Text>
-                </Pressable>
-              </View>
-            </>
-          )}
+                  <View style={styles.buttonGroup}>
+                    <Pressable
+                      style={[styles.button, styles.cancelButton]}
+                      onPress={() => {
+                        setIsEditing(false);
+                        setEditedText(noteText);
+                      }}
+                    >
+                      <Text style={styles.cancelButtonText}>Cancel</Text>
+                    </Pressable>
+
+                    <Pressable
+                      style={[styles.button, styles.saveButton]}
+                      onPress={handleSave}
+                      disabled={!editedText.trim()}
+                    >
+                      <Text style={styles.saveButtonText}>Save</Text>
+                    </Pressable>
+                  </View>
+                </>
+              ) : (
+                <>
+                  <View style={styles.noteContent}>
+                    <Text style={styles.noteText}>{noteText}</Text>
+                  </View>
+
+                  <View style={styles.buttonGroup}>
+                    <Pressable
+                      style={[styles.button, styles.deleteButton]}
+                      onPress={handleDelete}
+                    >
+                      <Text style={styles.deleteButtonText}>Delete Note</Text>
+                    </Pressable>
+
+                    <Pressable
+                      style={[styles.button, styles.closeButton]}
+                      onPress={handleClose}
+                    >
+                      <Text style={styles.closeButtonText}>Close</Text>
+                    </Pressable>
+                  </View>
+                </>
+              )}
+            </ScrollView>
+          </Pressable>
         </Pressable>
-      </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  keyboardAvoid: {
+    flex: 1,
+  },
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
