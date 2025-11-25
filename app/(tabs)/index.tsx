@@ -5,9 +5,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ServicesOverlay } from '@/components/ServicesOverlay';
 import { useServices } from '@/contexts/ServicesContext';
 
-// Import fetchHtml for web platform content loading
-const fetchHtml = Platform.OS === 'web' ? require('@/lib/dcs').fetchHtml : null;
-
 // WebView is only available on native platforms (iOS/Android)
 const WebView = Platform.OS !== 'web' ? require('react-native-webview').WebView : null;
 
@@ -17,7 +14,7 @@ export default function HomeScreen() {
   const [isLoadingHtml, setIsLoadingHtml] = React.useState(false);
   const [loadError, setLoadError] = React.useState<string | null>(null);
 
-  // On web platform, fetch the HTML content using our robust fetchHtml function
+  // On web platform, fetch the HTML content using dynamic import to avoid bundling cheerio on native
   React.useEffect(() => {
     if (!selectedResource || Platform.OS !== 'web') {
       setHtmlContent(null);
@@ -31,6 +28,8 @@ export default function HomeScreen() {
       setIsLoadingHtml(true);
       setLoadError(null);
       try {
+        // Use dynamic import to avoid bundling on native platforms
+        const { fetchHtml } = await import('@/lib/dcs');
         const html = await fetchHtml(selectedResource.url);
         if (!cancelled) {
           setHtmlContent(html);
