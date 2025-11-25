@@ -21,6 +21,7 @@ export default function HomeScreen() {
   const [matchCount, setMatchCount] = React.useState(0);
   const [currentMatchIndex, setCurrentMatchIndex] = React.useState(0);
   const matchElementsRef = React.useRef<HTMLElement[]>([]);
+  const [iframeLoaded, setIframeLoaded] = React.useState(false);
 
   // On web platform, fetch the HTML content using dynamic import to avoid bundling cheerio on native
   React.useEffect(() => {
@@ -113,24 +114,32 @@ export default function HomeScreen() {
     }
 
     const iframeDoc = iframeRef.current.contentDocument;
-    if (!iframeDoc) return;
+    if (!iframeDoc) {
+      console.log('No iframe document found');
+      return;
+    }
 
     // Clear previous highlights
     clearSearchHighlights();
 
     // Find all text nodes and highlight matches
     const matches: HTMLElement[] = [];
-    const searchRegex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+    const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    console.log('Searching for:', query, 'Escaped:', escapedQuery);
     
     const walkTextNodes = (node: Node) => {
       if (node.nodeType === 3) { // Text node
         const text = node.textContent || '';
-        if (searchRegex.test(text)) {
+        // Use a fresh regex for each test to avoid lastIndex issues
+        const testRegex = new RegExp(escapedQuery, 'i');
+        if (testRegex.test(text)) {
           const span = iframeDoc.createElement('span');
           const parent = node.parentNode;
           if (!parent) return;
           
-          span.innerHTML = text.replace(searchRegex, (match) => {
+          // Use a fresh regex for replacement
+          const replaceRegex = new RegExp(escapedQuery, 'gi');
+          span.innerHTML = text.replace(replaceRegex, (match) => {
             return `<mark class="search-highlight" style="background-color: #fef08a; padding: 2px 0;">${match}</mark>`;
           });
           
@@ -149,7 +158,12 @@ export default function HomeScreen() {
       }
     };
 
-    walkTextNodes(iframeDoc.body);
+    if (iframeDoc.body) {
+      walkTextNodes(iframeDoc.body);
+      console.log('Found matches:', matches.length);
+    } else {
+      console.log('No iframe body found');
+    }
     
     matchElementsRef.current = matches;
     setMatchCount(matches.length);
@@ -314,6 +328,14 @@ export default function HomeScreen() {
                     height: '100%',
                   }}
                   title="Service Content"
+                  onLoad={() => {
+                    console.log('Iframe loaded');
+                    setIframeLoaded(true);
+                    // Re-run search if there's a query
+                    if (searchQuery) {
+                      performSearch(searchQuery);
+                    }
+                  }}
                 />
               ) : null
             ) : (
