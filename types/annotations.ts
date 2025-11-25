@@ -42,15 +42,15 @@ export interface IconDefinition {
 export const ICON_DEFINITIONS: IconDefinition[] = [
   {
     type: 'deacon-out',
-    emoji: '🚪➡️',
-    label: 'Deacon Going Out',
-    description: 'Mark when the deacon goes out the door',
+    emoji: '🧑✝️➡️',
+    label: 'Clergy Going Out',
+    description: 'Mark when the clergy goes out',
   },
   {
     type: 'deacon-in',
-    emoji: '➡️🚪',
-    label: 'Deacon Coming In',
-    description: 'Mark when the deacon comes back in',
+    emoji: '➡️🧑✝️',
+    label: 'Clergy Coming In',
+    description: 'Mark when the clergy comes back in',
   },
   {
     type: 'censor-ready',

@@ -503,8 +503,14 @@ export default function HomeScreen() {
             setSelectedAnnotation(annotation);
             setNoteViewerVisible(true);
           } else if (annotation.type === 'icon') {
+            // Get icon label for confirmation message
+            const iconDef = annotation.iconType 
+              ? ICON_DEFINITIONS.find(d => d.type === annotation.iconType)
+              : null;
+            const iconLabel = iconDef?.label || 'this';
+            
             // Show delete confirmation for icon
-            if (window.confirm('Do you want to remove this icon annotation?')) {
+            if (window.confirm(`Do you want to remove the ${iconLabel} icon?`)) {
               removeAnnotation(annotation.id).then(() => {
                 // Reload annotations
                 setIframeLoaded(false);
@@ -654,10 +660,17 @@ export default function HomeScreen() {
           } else if (annotation.type === 'icon') {
             console.log('✅ Showing delete confirmation for icon annotation');
             setSelectedAnnotation(annotation);
+            
+            // Get icon label
+            const iconDef = annotation.iconType 
+              ? ICON_DEFINITIONS.find(d => d.type === annotation.iconType)
+              : null;
+            const iconLabel = iconDef?.label || 'this';
+            
             // Show delete confirmation for icon
             Alert.alert(
               'Remove Icon',
-              'Do you want to remove this icon annotation?',
+              `Do you want to remove the ${iconLabel} icon?`,
               [
                 { text: 'Cancel', style: 'cancel' },
                 {
