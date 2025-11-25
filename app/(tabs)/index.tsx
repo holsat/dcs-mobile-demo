@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ServicesOverlay } from '@/components/ServicesOverlay';
@@ -9,10 +9,13 @@ import { useServices } from '@/contexts/ServicesContext';
 const WebView = Platform.OS !== 'web' ? require('react-native-webview').WebView : null;
 
 export default function HomeScreen() {
-  const { selectedResource, openOverlay } = useServices();
+  const { selectedResource, openOverlay, clearSelectedResource } = useServices();
   const [htmlContent, setHtmlContent] = React.useState<string | null>(null);
   const [isLoadingHtml, setIsLoadingHtml] = React.useState(false);
   const [loadError, setLoadError] = React.useState<string | null>(null);
+  const [searchVisible, setSearchVisible] = React.useState(false);
+  const [searchQuery, setSearchQuery] = React.useState('');
+  const iframeRef = React.useRef<HTMLIFrameElement>(null);
 
   // On web platform, fetch the HTML content using dynamic import to avoid bundling cheerio on native
   React.useEffect(() => {
@@ -53,20 +56,87 @@ export default function HomeScreen() {
     };
   }, [selectedResource]);
 
+  const handleBack = () => {
+    clearSelectedResource();
+    setSearchVisible(false);
+    setSearchQuery('');
+  };
+
+  const toggleSearch = () => {
+    setSearchVisible(!searchVisible);
+    if (searchVisible) {
+      setSearchQuery('');
+    }
+  };
+
+  // Handle search in iframe on web platform
+  React.useEffect(() => {
+    if (Platform.OS !== 'web' || !iframeRef.current || !searchQuery) return;
+
+    const iframe = iframeRef.current;
+    const timer = setTimeout(() => {
+      try {
+        const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+        if (iframeDoc) {
+          // Use the browser's find API to search
+          if (iframe.contentWindow) {
+            iframe.contentWindow.find(searchQuery, false, false, true, false, true, false);
+          }
+        }
+      } catch (error) {
+        console.error('Search error:', error);
+      }
+    }, 300); // Debounce search
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   return (
     <View style={styles.root}>
       <SafeAreaView style={styles.safe}>
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.heading}>GOA Digital Chant Stand</Text>
-            <Text style={styles.subHeading}>Mobile Services Viewer</Text>
-          </View>
-          <Pressable style={styles.actionButton} onPress={openOverlay}>
-            <Text style={styles.actionButtonText}>Services</Text>
-          </Pressable>
-        </View>
-
         {selectedResource ? (
+          // Toolbar when content is loaded
+          <View style={styles.toolbar}>
+            <Pressable style={styles.toolbarButton} onPress={handleBack}>
+              <Text style={styles.toolbarButtonText}>← Back</Text>
+            </Pressable>
+            <Text style={styles.toolbarTitle} numberOfLines={1}>
+              {selectedResource.serviceTitle}
+            </Text>
+            <Pressable style={styles.toolbarButton} onPress={toggleSearch}>
+              <Text style={styles.toolbarButtonText}>🔍 Search</Text>
+            </Pressable>
+          </View>
+        ) : (
+          // Original header when no content is loaded
+          <View style={styles.header}>
+            <View>
+              <Text style={styles.heading}>GOA Digital Chant Stand</Text>
+              <Text style={styles.subHeading}>Mobile Services Viewer</Text>
+            </View>
+            <Pressable style={styles.actionButton} onPress={openOverlay}>
+              <Text style={styles.actionButtonText}>Services</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {selectedResource && searchVisible ? (
+          <View style={styles.searchPanel}>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search in service content..."
+              placeholderTextColor="#94a3b8"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              autoFocus
+            />
+            {searchQuery.length > 0 && (
+              <Pressable style={styles.clearButton} onPress={() => setSearchQuery('')}>
+                <Text style={styles.clearButtonText}>✕</Text>
+              </Pressable>
+            )}
+          </View>
+        ) : selectedResource && !searchVisible ? (
           <View style={styles.metaPanel}>
             <View>
               <Text style={styles.metaLabel}>Service</Text>
@@ -108,6 +178,7 @@ export default function HomeScreen() {
                 </View>
               ) : htmlContent ? (
                 <iframe
+                  ref={iframeRef}
                   srcDoc={htmlContent}
                   style={{
                     flex: 1,
@@ -151,6 +222,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 16,
+  },
+  toolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    backgroundColor: '#1e40af',
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  toolbarButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  toolbarButtonText: {
+    color: '#ffffff',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  toolbarTitle: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ffffff',
+    textAlign: 'center',
+    marginHorizontal: 8,
   },
   heading: {
     fontSize: 22,
@@ -232,5 +332,31 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#94a3b8',
     textAlign: 'center',
+  },
+  searchPanel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: '#1e40af',
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#0f172a',
+    paddingVertical: 8,
+  },
+  clearButton: {
+    padding: 4,
+    marginLeft: 8,
+  },
+  clearButtonText: {
+    fontSize: 20,
+    color: '#94a3b8',
+    fontWeight: '600',
   },
 });

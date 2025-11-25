@@ -26,6 +26,7 @@ type ServicesContextValue = {
   loadingServices: boolean;
   selectedResource?: SelectedResource;
   selectResource: (service: DcsService, resource: DcsServiceResource) => void;
+  clearSelectedResource: () => void;
 };
 
 const ServicesContext = createContext<ServicesContextValue | undefined>(undefined);
@@ -94,6 +95,10 @@ export function ServicesProvider({ children }: { children: React.ReactNode }) {
     setIsOverlayOpen(false);
   }, [selectedDate]);
 
+  const clearSelectedResource = useCallback(() => {
+    setSelectedResource(undefined);
+  }, []);
+
   const availableDates = useMemo(() => {
     const year = Number(currentMonth.slice(0, 4));
     return availableDatesByYear.get(year) ?? new Set<string>();
@@ -114,6 +119,7 @@ export function ServicesProvider({ children }: { children: React.ReactNode }) {
     loadingServices,
     selectedResource,
     selectResource,
+    clearSelectedResource,
   }), [
     isOverlayOpen,
     openOverlay,
@@ -128,6 +134,7 @@ export function ServicesProvider({ children }: { children: React.ReactNode }) {
     loadingServices,
     selectedResource,
     selectResource,
+    clearSelectedResource,
   ]);
 
   return <ServicesContext.Provider value={value}>{children}</ServicesContext.Provider>;
