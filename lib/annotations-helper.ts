@@ -175,28 +175,64 @@ export function getPositionFromEvent(
   event: MouseEvent | Touch
 ): AnnotationPosition | null {
   try {
-    const range = doc.caretRangeFromPoint
-      ? doc.caretRangeFromPoint(event.clientX, event.clientY)
-      : null;
+    console.log('getPositionFromEvent called with:', { x: event.clientX, y: event.clientY });
+    
+    // Try both APIs for cross-browser support
+    let range: Range | null = null;
+    
+    // Try caretRangeFromPoint (WebKit/Blink)
+    if ((doc as any).caretRangeFromPoint) {
+      range = (doc as any).caretRangeFromPoint(event.clientX, event.clientY);
+      console.log('Using caretRangeFromPoint, got range:', range);
+    }
+    // Try caretPositionFromPoint (Firefox)
+    else if (doc.caretPositionFromPoint) {
+      const caretPosition = doc.caretPositionFromPoint(event.clientX, event.clientY);
+      if (caretPosition) {
+        range = doc.createRange();
+        range.setStart(caretPosition.offsetNode, caretPosition.offset);
+        console.log('Using caretPositionFromPoint, got range:', range);
+      }
+    }
     
     if (!range) {
-      console.error('Could not get range from point');
+      console.error('Could not get range from point - API not supported or click outside text');
+      // Fallback: use the clicked element itself
+      const target = (event as MouseEvent).target as Node;
+      if (target && target.nodeType === Node.ELEMENT_NODE) {
+        console.log('Fallback: using clicked element as target');
+        const xpath = getXPathForElement(target);
+        const text = target.textContent || '';
+        const textSnippet = text.substring(0, Math.min(40, text.length));
+        
+        return {
+          xpath,
+          offset: 0,
+          textSnippet,
+        };
+      }
       return null;
     }
     
     const node = range.startContainer;
     const offset = range.startOffset;
     
+    console.log('Got node:', node, 'offset:', offset);
+    
     // Get XPath for the node
     const xpath = node.nodeType === Node.TEXT_NODE && node.parentNode
       ? getXPathForElement(node.parentNode)
       : getXPathForElement(node);
+    
+    console.log('Generated XPath:', xpath);
     
     // Get text snippet for fallback
     const text = node.textContent || '';
     const snippetStart = Math.max(0, offset - 20);
     const snippetEnd = Math.min(text.length, offset + 20);
     const textSnippet = text.substring(snippetStart, snippetEnd);
+    
+    console.log('Text snippet:', textSnippet);
     
     return {
       xpath,

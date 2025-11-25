@@ -536,33 +536,55 @@ export default function HomeScreen() {
   // Setup click listener for web when in annotation mode
   React.useEffect(() => {
     if (Platform.OS !== 'web' || !iframeLoaded || !iframeRef.current || !annotationMode) {
+      console.log('Annotation click listener not attached:', { 
+        platform: Platform.OS, 
+        iframeLoaded, 
+        hasIframeRef: !!iframeRef.current, 
+        annotationMode 
+      });
       return;
     }
 
     const iframeDoc = iframeRef.current.contentDocument;
-    if (!iframeDoc) return;
+    if (!iframeDoc) {
+      console.log('No iframe document found');
+      return;
+    }
+
+    console.log('✅ Attaching annotation click listener');
 
     const handleClick = async (e: MouseEvent) => {
+      console.log('🎯 Click detected in annotation mode!', e);
+      
       // Don't trigger if clicking on an existing annotation marker
       const target = e.target as HTMLElement;
       if (target.classList.contains('dcs-annotation')) {
+        console.log('Clicked on existing annotation, ignoring');
         return;
       }
 
       e.preventDefault();
       e.stopPropagation();
       
+      console.log('Getting position from click event...');
       const { getPositionFromEvent } = await import('@/lib/annotations-helper');
       const position = getPositionFromEvent(iframeDoc, e);
+      console.log('Position:', position);
+      
       if (position) {
+        console.log('✅ Showing annotation selector');
         setPendingAnnotationPosition(position);
         setAnnotationSelectorVisible(true);
+      } else {
+        console.error('❌ Failed to get position from event');
       }
     };
 
     iframeDoc.addEventListener('click', handleClick as any, true);
+    console.log('✅ Click listener attached to iframe document');
 
     return () => {
+      console.log('🧹 Removing annotation click listener');
       iframeDoc.removeEventListener('click', handleClick as any, true);
     };
   }, [iframeLoaded, annotationMode]);
@@ -585,24 +607,32 @@ export default function HomeScreen() {
 
   // Enhanced WebView message handler for annotations
   const handleWebViewMessageWithAnnotations = (event: any) => {
+    console.log('📨 WebView message received:', event.nativeEvent.data);
+    
     // Call existing handler first
     handleWebViewMessage(event);
 
     try {
       const data = JSON.parse(event.nativeEvent.data);
+      console.log('📦 Parsed data:', data);
       
       if (data.type === 'longPress' && data.position) {
+        console.log('✅ Long-press event detected, showing annotation selector');
         setPendingAnnotationPosition(data.position);
         setAnnotationSelectorVisible(true);
       } else if (data.type === 'annotationClick' && data.annotationId) {
+        console.log('✅ Annotation click detected for ID:', data.annotationId);
         const serviceType = getServiceType();
         const annotations = getAnnotationsForService(serviceType);
         const annotation = annotations.find(a => a.id === data.annotationId);
         
         if (annotation && annotation.type === 'note') {
+          console.log('✅ Showing note viewer for annotation');
           setSelectedAnnotation(annotation);
           setNoteViewerVisible(true);
         }
+      } else {
+        console.log('ℹ️ Unhandled message type:', data.type);
       }
     } catch (error) {
       console.error('Error parsing annotation WebView message:', error);
@@ -701,12 +731,14 @@ export default function HomeScreen() {
             <Text style={styles.toolbarTitle} numberOfLines={1}>
               {selectedResource.serviceTitle}
             </Text>
-            <Pressable 
-              style={[styles.toolbarButton, annotationMode && styles.toolbarButtonActive]} 
-              onPress={() => setAnnotationMode(!annotationMode)}
-            >
-              <Text style={styles.toolbarButtonText}>📌 {annotationMode ? 'Done' : 'Note'}</Text>
-            </Pressable>
+            {Platform.OS === 'web' && (
+              <Pressable 
+                style={[styles.toolbarButton, annotationMode && styles.toolbarButtonActive]} 
+                onPress={() => setAnnotationMode(!annotationMode)}
+              >
+                <Text style={styles.toolbarButtonText}>📌 {annotationMode ? 'Done' : 'Note'}</Text>
+              </Pressable>
+            )}
             <Pressable style={styles.toolbarButton} onPress={toggleSearch}>
               <Text style={styles.toolbarButtonText}>🔍</Text>
             </Pressable>
