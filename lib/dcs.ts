@@ -16,8 +16,8 @@ export type DcsService = {
 const SERVICES_INDEX_URL = 'https://dcs.goarch.org/goa/dcs/servicesindex.html';
 const INDEX_BASE_URL = 'https://dcs.goarch.org/goa/dcs/indexes/';
 const CORS_PROXIES: Array<(url: string) => string> = [
-  (url) => `https://cors.isomorphic-git.org/${url}`,
-  (url) => `https://corsproxy.io/?${url}`,
+  (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
 ];
 
 function toAbsoluteUrl(baseUrl: string, href: string | undefined): string | null {
