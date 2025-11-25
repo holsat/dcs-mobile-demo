@@ -215,15 +215,212 @@ export default function HomeScreen() {
     highlightCurrentMatch(prevIndex);
   };
 
+  // Perform search on native WebView
+  const performNativeSearch = (query: string) => {
+    if (!webViewRef.current || !query) {
+      // Clear highlights
+      if (webViewRef.current) {
+        webViewRef.current.injectJavaScript(`
+          (function() {
+            const highlights = document.querySelectorAll('.search-highlight, .search-highlight-current');
+            highlights.forEach(highlight => {
+              const parent = highlight.parentNode;
+              if (parent) {
+                parent.replaceChild(document.createTextNode(highlight.textContent || ''), highlight);
+                parent.normalize();
+              }
+            });
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'searchResults', count: 0 }));
+          })();
+        `);
+      }
+      setMatchCount(0);
+      setCurrentMatchIndex(0);
+      return;
+    }
+
+    const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    
+    // Inject search JavaScript into WebView
+    const searchScript = `
+      (function() {
+        // Clear previous highlights
+        const oldHighlights = document.querySelectorAll('.search-highlight, .search-highlight-current');
+        oldHighlights.forEach(highlight => {
+          const parent = highlight.parentNode;
+          if (parent) {
+            parent.replaceChild(document.createTextNode(highlight.textContent || ''), highlight);
+            parent.normalize();
+          }
+        });
+
+        // Search and highlight
+        const matches = [];
+        const searchRegex = new RegExp('${escapedQuery}', 'gi');
+        
+        function walkTextNodes(node) {
+          if (node.nodeType === 3) { // Text node
+            const text = node.textContent || '';
+            const testRegex = new RegExp('${escapedQuery}', 'i');
+            if (testRegex.test(text)) {
+              const span = document.createElement('span');
+              const parent = node.parentNode;
+              if (!parent) return;
+              
+              const replaceRegex = new RegExp('${escapedQuery}', 'gi');
+              span.innerHTML = text.replace(replaceRegex, function(match) {
+                return '<mark class="search-highlight" style="background-color: #fef08a; padding: 2px 0;">' + match + '</mark>';
+              });
+              
+              parent.replaceChild(span, node);
+              
+              const highlightElements = span.querySelectorAll('.search-highlight');
+              highlightElements.forEach(function(el) {
+                matches.push(el);
+              });
+            }
+          } else if (node.nodeType === 1) {
+            const element = node;
+            if (!['SCRIPT', 'STYLE', 'NOSCRIPT', 'IFRAME'].includes(element.tagName)) {
+              Array.from(node.childNodes).forEach(walkTextNodes);
+            }
+          }
+        }
+
+        if (document.body) {
+          walkTextNodes(document.body);
+        }
+
+        // Store matches globally for navigation
+        window._searchMatches = matches;
+        window._currentMatchIndex = 0;
+
+        // Highlight first match
+        if (matches.length > 0) {
+          matches[0].className = 'search-highlight-current';
+          matches[0].style.backgroundColor = '#facc15';
+          matches[0].style.fontWeight = 'bold';
+          matches[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        // Send results back to React Native
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'searchResults',
+          count: matches.length,
+          currentIndex: 0
+        }));
+      })();
+    `;
+
+    webViewRef.current.injectJavaScript(searchScript);
+  };
+
+  // Navigate to next match in native WebView
+  const nativeNextMatch = () => {
+    if (!webViewRef.current) return;
+
+    const navScript = `
+      (function() {
+        const matches = window._searchMatches || [];
+        if (matches.length === 0) return;
+
+        const currentIndex = window._currentMatchIndex || 0;
+        const nextIndex = (currentIndex + 1) % matches.length;
+
+        // Remove current highlight from all matches
+        matches.forEach(function(match) {
+          match.className = 'search-highlight';
+          match.style.backgroundColor = '#fef08a';
+          match.style.fontWeight = 'normal';
+        });
+
+        // Highlight current match
+        matches[nextIndex].className = 'search-highlight-current';
+        matches[nextIndex].style.backgroundColor = '#facc15';
+        matches[nextIndex].style.fontWeight = 'bold';
+        matches[nextIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        window._currentMatchIndex = nextIndex;
+
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'searchResults',
+          count: matches.length,
+          currentIndex: nextIndex
+        }));
+      })();
+    `;
+
+    webViewRef.current.injectJavaScript(navScript);
+  };
+
+  // Navigate to previous match in native WebView
+  const nativePreviousMatch = () => {
+    if (!webViewRef.current) return;
+
+    const navScript = `
+      (function() {
+        const matches = window._searchMatches || [];
+        if (matches.length === 0) return;
+
+        const currentIndex = window._currentMatchIndex || 0;
+        const prevIndex = currentIndex === 0 ? matches.length - 1 : currentIndex - 1;
+
+        // Remove current highlight from all matches
+        matches.forEach(function(match) {
+          match.className = 'search-highlight';
+          match.style.backgroundColor = '#fef08a';
+          match.style.fontWeight = 'normal';
+        });
+
+        // Highlight current match
+        matches[prevIndex].className = 'search-highlight-current';
+        matches[prevIndex].style.backgroundColor = '#facc15';
+        matches[prevIndex].style.fontWeight = 'bold';
+        matches[prevIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        window._currentMatchIndex = prevIndex;
+
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'searchResults',
+          count: matches.length,
+          currentIndex: prevIndex
+        }));
+      })();
+    `;
+
+    webViewRef.current.injectJavaScript(navScript);
+  };
+
+  // Handle messages from WebView
+  const handleWebViewMessage = (event: any) => {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+      if (data.type === 'searchResults') {
+        setMatchCount(data.count);
+        setCurrentMatchIndex(data.currentIndex);
+      }
+    } catch (error) {
+      console.error('Error parsing WebView message:', error);
+    }
+  };
+
   // Handle search with debouncing
   React.useEffect(() => {
-    if (Platform.OS !== 'web' || !searchQuery) {
-      clearSearchHighlights();
+    if (!searchQuery) {
+      if (Platform.OS === 'web') {
+        clearSearchHighlights();
+      } else {
+        performNativeSearch('');
+      }
       return;
     }
 
     const timer = setTimeout(() => {
-      performSearch(searchQuery);
+      if (Platform.OS === 'web') {
+        performSearch(searchQuery);
+      } else {
+        performNativeSearch(searchQuery);
+      }
     }, 300); // Debounce search
 
     return () => clearTimeout(timer);
@@ -275,10 +472,10 @@ export default function HomeScreen() {
                     {currentMatchIndex + 1} of {matchCount}
                   </Text>
                   <View style={styles.navButtons}>
-                    <Pressable style={styles.navButton} onPress={previousMatch}>
+                    <Pressable style={styles.navButton} onPress={Platform.OS === 'web' ? previousMatch : nativePreviousMatch}>
                       <Text style={styles.navButtonText}>↑</Text>
                     </Pressable>
-                    <Pressable style={styles.navButton} onPress={nextMatch}>
+                    <Pressable style={styles.navButton} onPress={Platform.OS === 'web' ? nextMatch : nativeNextMatch}>
                       <Text style={styles.navButtonText}>↓</Text>
                     </Pressable>
                   </View>
@@ -347,6 +544,7 @@ export default function HomeScreen() {
                 onNavigationStateChange={(navState: any) => {
                   setCanGoBack(navState.canGoBack);
                 }}
+                onMessage={handleWebViewMessage}
               />
             )
           ) : (
