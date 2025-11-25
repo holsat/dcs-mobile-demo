@@ -103,14 +103,14 @@ export const ICON_DEFINITIONS: IconDefinition[] = [
   {
     type: 'candles-lit',
     emoji: '🕯️✨',
-    label: 'Candles Lit',
+    label: 'Light Candles',
     description: 'Light the candles',
   },
   {
     type: 'candles-out',
-    emoji: '🕯️💨',
+    emoji: '🕯️➡️',
     label: 'Candles Out',
-    description: 'Extinguish the candles',
+    description: 'Candle bearers exit the altar',
   },
 ];
 
