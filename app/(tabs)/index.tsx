@@ -11,6 +11,16 @@ const WebView = Platform.OS !== 'web' ? require('react-native-webview').WebView 
 export default function HomeScreen() {
   const { selectedResource, openOverlay } = useServices();
 
+  // On web platform, we need to proxy the service content URL through CORS proxy
+  const displayUrl = React.useMemo(() => {
+    if (!selectedResource) return null;
+    if (Platform.OS === 'web') {
+      // Use the same CORS proxy for consistency
+      return `https://api.allorigins.win/raw?url=${encodeURIComponent(selectedResource.url)}`;
+    }
+    return selectedResource.url;
+  }, [selectedResource]);
+
   return (
     <View style={styles.root}>
       <SafeAreaView style={styles.safe}>
@@ -49,10 +59,10 @@ export default function HomeScreen() {
         )}
 
         <View style={styles.viewer}>
-          {selectedResource ? (
+          {displayUrl ? (
             Platform.OS === 'web' ? (
               <iframe
-                src={selectedResource.url}
+                src={displayUrl}
                 style={{
                   flex: 1,
                   border: 'none',
@@ -63,7 +73,7 @@ export default function HomeScreen() {
               />
             ) : (
               <WebView
-                source={{ uri: selectedResource.url }}
+                source={{ uri: displayUrl }}
                 startInLoadingState
                 style={styles.webview}
               />
