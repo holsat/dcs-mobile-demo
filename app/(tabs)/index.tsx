@@ -447,11 +447,8 @@ export default function HomeScreen() {
           <View style={styles.header}>
             <View>
               <Text style={styles.heading}>GOA Digital Chant Stand</Text>
-              <Text style={styles.subHeading}>Mobile Services Viewer</Text>
+              <Text style={styles.subHeading}>Enhanced Digital Chant Stand Viewer</Text>
             </View>
-            <Pressable style={styles.actionButton} onPress={openOverlay}>
-              <Text style={styles.actionButtonText}>Services</Text>
-            </Pressable>
           </View>
         )}
 
