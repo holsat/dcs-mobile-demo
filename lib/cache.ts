@@ -460,3 +460,156 @@ export async function getWithRevalidate<T>(
   await setCache(key, data, ttl, useFileSystem);
   return data;
 }
+
+// ==================== ASSET CACHING (PHASE 4) ====================
+
+/**
+ * Extract all asset URLs from HTML content (images, audio)
+ */
+export function extractAssetUrls(html: string, baseUrl: string): string[] {
+  const urls: string[] = [];
+  
+  // Match img src attributes
+  const imgRegex = /<img[^>]+src=["']([^"']+)["']/gi;
+  let match;
+  while ((match = imgRegex.exec(html)) !== null) {
+    urls.push(resolveUrl(match[1], baseUrl));
+  }
+  
+  // Match audio src attributes
+  const audioRegex = /<audio[^>]*>[\s\S]*?<source[^>]+src=["']([^"']+)["']/gi;
+  while ((match = audioRegex.exec(html)) !== null) {
+    urls.push(resolveUrl(match[1], baseUrl));
+  }
+  
+  // Match background images in style attributes
+  const bgImgRegex = /style=["'][^"']*background-image:\s*url\(["']?([^"')]+)["']?\)/gi;
+  while ((match = bgImgRegex.exec(html)) !== null) {
+    urls.push(resolveUrl(match[1], baseUrl));
+  }
+  
+  return [...new Set(urls)]; // Remove duplicates
+}
+
+/**
+ * Resolve relative URLs to absolute
+ */
+function resolveUrl(url: string, baseUrl: string): string {
+  // Already absolute
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+  
+  // Protocol-relative
+  if (url.startsWith('//')) {
+    return 'https:' + url;
+  }
+  
+  // Absolute path
+  if (url.startsWith('/')) {
+    const base = new URL(baseUrl);
+    return `${base.protocol}//${base.host}${url}`;
+  }
+  
+  // Relative path
+  const base = baseUrl.endsWith('/') ? baseUrl : baseUrl.substring(0, baseUrl.lastIndexOf('/') + 1);
+  return base + url;
+}
+
+/**
+ * Cache an asset (image, audio, etc.)
+ */
+export async function cacheAsset(url: string, ttl: number = TTL.THREE_MONTHS): Promise<string> {
+  const key = getAssetKey(url);
+  
+  // Check if already cached
+  const cached = await getCache<string>(key);
+  if (cached) {
+    console.log(`✅ Asset already cached: ${url}`);
+    return cached;
+  }
+  
+  try {
+    console.log(`📥 Downloading asset: ${url}`);
+    
+    // Get file extension from URL
+    const extension = url.split('.').pop()?.split('?')[0] || 'dat';
+    const fileName = `asset_${hashUrl(url)}.${extension}`;
+    const filePath = `${CACHE_DIR}${fileName}`;
+    
+    // Download to file system
+    const downloadResult = await FileSystem.downloadAsync(url, filePath);
+    
+    if (downloadResult.status === 200) {
+      // Store file path in cache
+      await setCache(key, filePath, ttl, false);
+      console.log(`✅ Asset cached: ${url} -> ${filePath}`);
+      return filePath;
+    } else {
+      console.error(`❌ Failed to download asset: ${url} (status: ${downloadResult.status})`);
+      return url; // Return original URL on failure
+    }
+  } catch (error) {
+    console.error(`❌ Error caching asset: ${url}`, error);
+    return url; // Return original URL on error
+  }
+}
+
+/**
+ * Pre-fetch and cache all assets in HTML content
+ * Returns a map of original URL -> cached file path
+ */
+export async function cacheHtmlAssets(
+  html: string,
+  baseUrl: string,
+  maxConcurrent: number = 3
+): Promise<Map<string, string>> {
+  const assetUrls = extractAssetUrls(html, baseUrl);
+  const assetMap = new Map<string, string>();
+  
+  if (assetUrls.length === 0) {
+    return assetMap;
+  }
+  
+  console.log(`📦 Pre-fetching ${assetUrls.length} assets...`);
+  
+  // Process assets in batches to avoid overwhelming the network
+  for (let i = 0; i < assetUrls.length; i += maxConcurrent) {
+    const batch = assetUrls.slice(i, i + maxConcurrent);
+    const results = await Promise.allSettled(
+      batch.map(url => cacheAsset(url))
+    );
+    
+    results.forEach((result, index) => {
+      const originalUrl = batch[index];
+      if (result.status === 'fulfilled') {
+        assetMap.set(originalUrl, result.value);
+      } else {
+        console.error(`Failed to cache asset: ${originalUrl}`, result.reason);
+        assetMap.set(originalUrl, originalUrl); // Keep original URL
+      }
+    });
+  }
+  
+  console.log(`✅ Cached ${assetMap.size}/${assetUrls.length} assets`);
+  return assetMap;
+}
+
+/**
+ * Replace asset URLs in HTML with cached file paths (for native platforms)
+ */
+export function replaceAssetUrls(html: string, assetMap: Map<string, string>): string {
+  let modifiedHtml = html;
+  
+  assetMap.forEach((cachedPath, originalUrl) => {
+    // Only replace if we have a local file path
+    if (cachedPath.startsWith('file://') || cachedPath.includes(CACHE_DIR)) {
+      // Escape special regex characters in URL
+      const escapedUrl = originalUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(escapedUrl, 'g');
+      modifiedHtml = modifiedHtml.replace(regex, cachedPath);
+    }
+  });
+  
+  return modifiedHtml;
+}
