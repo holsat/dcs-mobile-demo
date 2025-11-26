@@ -92,6 +92,7 @@ export default function CacheSettingsScreen() {
         options={{
           title: 'Cache & Storage',
           headerShown: true,
+          headerBackTitle: 'Settings',
         }}
       />
       <ScrollView

@@ -7,6 +7,7 @@ import { AnnotationSelector } from '@/components/AnnotationSelector';
 import { NoteViewer } from '@/components/NoteViewer';
 import { useServices } from '@/contexts/ServicesContext';
 import { useAnnotations } from '@/contexts/AnnotationsContext';
+import { usePreferences } from '@/contexts/PreferencesContext';
 import { ICON_DEFINITIONS, NOTE_EMOJI, type IconType, type Annotation, type AnnotationPosition } from '@/types/annotations';
 
 // WebView is only available on native platforms (iOS/Android)
@@ -21,6 +22,7 @@ export default function HomeScreen() {
     updateNoteAnnotation, 
     removeAnnotation 
   } = useAnnotations();
+  const { preferences } = usePreferences();
   
   const [htmlContent, setHtmlContent] = React.useState<string | null>(null);
   const [isLoadingHtml, setIsLoadingHtml] = React.useState(false);
@@ -600,6 +602,11 @@ export default function HomeScreen() {
       console.log('Position:', position);
       
       if (position) {
+        // Check if any annotation features are enabled
+        if (!preferences.altarServerAnnotationsEnabled && !preferences.notesEnabled) {
+          console.log('❌ Both annotation features are disabled');
+          return;
+        }
         console.log('✅ Showing annotation selector');
         setPendingAnnotationPosition(position);
         setAnnotationSelectorVisible(true);
@@ -656,6 +663,11 @@ export default function HomeScreen() {
       console.log('📦 Parsed data:', data);
       
       if (data.type === 'longPress' && data.position) {
+        // Check if any annotation features are enabled
+        if (!preferences.altarServerAnnotationsEnabled && !preferences.notesEnabled) {
+          console.log('❌ Both annotation features are disabled');
+          return;
+        }
         console.log('✅ Long-press event detected, showing annotation selector');
         setPendingAnnotationPosition(data.position);
         setAnnotationSelectorVisible(true);

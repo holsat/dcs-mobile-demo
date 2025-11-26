@@ -16,6 +16,7 @@ export default function AnnotationsSettingsScreen() {
         options={{
           title: 'Annotations',
           headerShown: true,
+          headerBackTitle: 'Settings',
         }}
       />
       <ScrollView
@@ -41,8 +42,8 @@ export default function AnnotationsSettingsScreen() {
                 <Switch
                   value={preferences.altarServerAnnotationsEnabled}
                   onValueChange={(value) => updatePreference('altarServerAnnotationsEnabled', value)}
-                  trackColor={{ false: '#767577', true: Colors[colorScheme ?? 'light'].tint }}
-                  thumbColor="#f4f3f4"
+                  trackColor={{ false: '#767577', true: '#34c759' }}
+                  ios_backgroundColor="#767577"
                 />
               </View>
               
@@ -60,8 +61,8 @@ export default function AnnotationsSettingsScreen() {
                 <Switch
                   value={preferences.notesEnabled}
                   onValueChange={(value) => updatePreference('notesEnabled', value)}
-                  trackColor={{ false: '#767577', true: Colors[colorScheme ?? 'light'].tint }}
-                  thumbColor="#f4f3f4"
+                  trackColor={{ false: '#767577', true: '#34c759' }}
+                  ios_backgroundColor="#767577"
                 />
               </View>
             </View>
