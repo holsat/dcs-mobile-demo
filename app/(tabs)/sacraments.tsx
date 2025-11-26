@@ -20,6 +20,7 @@ export default function SacramentsScreen() {
   const [currentMatchIndex, setCurrentMatchIndex] = React.useState(0);
   const matchElementsRef = React.useRef<HTMLElement[]>([]);
   const [iframeLoaded, setIframeLoaded] = React.useState(false);
+  const [isPdfContent, setIsPdfContent] = React.useState(false);
 
   // Load sacraments content with caching
   React.useEffect(() => {
@@ -342,8 +343,9 @@ export default function SacramentsScreen() {
           <Text style={styles.toolbarTitle}>Sacraments & Services</Text>
 
           <Pressable
-            style={styles.toolbarButton}
-            onPress={() => setSearchVisible(!searchVisible)}
+            style={[styles.toolbarButton, isPdfContent && styles.toolbarButtonDisabled]}
+            onPress={() => !isPdfContent && setSearchVisible(!searchVisible)}
+            disabled={isPdfContent}
           >
             <Text style={styles.toolbarButtonText}>🔍</Text>
           </Pressable>
@@ -433,6 +435,20 @@ export default function SacramentsScreen() {
           style={styles.webView}
           onNavigationStateChange={(navState: any) => {
             setCanGoBack(navState.canGoBack);
+            
+            // Detect if current page is a PDF
+            const url = navState.url || '';
+            const isPdf = url.toLowerCase().endsWith('.pdf') || 
+                          url.toLowerCase().includes('.pdf?') ||
+                          url.toLowerCase().includes('application/pdf');
+            
+            setIsPdfContent(isPdf);
+            
+            // Clear search when navigating to PDF
+            if (isPdf && searchVisible) {
+              setSearchVisible(false);
+              setSearchQuery('');
+            }
           }}
         />
       </SafeAreaView>
