@@ -38,6 +38,20 @@ export default function TabLayout() {
           },
         }}
       />
+      <Tabs.Screen
+        name="sacraments"
+        options={{
+          title: 'Sacraments',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="book.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: 'Settings',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="gearshape.fill" color={color} />,
+        }}
+      />
     </Tabs>
   );
 }

@@ -2,11 +2,11 @@ import React from 'react';
 import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { ServicesOverlay } from '@/components/ServicesOverlay';
 import { AnnotationSelector } from '@/components/AnnotationSelector';
 import { NoteViewer } from '@/components/NoteViewer';
 import { useServices } from '@/contexts/ServicesContext';
 import { useAnnotations } from '@/contexts/AnnotationsContext';
+import { usePreferences } from '@/contexts/PreferencesContext';
 import { ICON_DEFINITIONS, NOTE_EMOJI, type IconType, type Annotation, type AnnotationPosition } from '@/types/annotations';
 
 // WebView is only available on native platforms (iOS/Android)
@@ -21,6 +21,7 @@ export default function HomeScreen() {
     updateNoteAnnotation, 
     removeAnnotation 
   } = useAnnotations();
+  const { preferences } = usePreferences();
   
   const [htmlContent, setHtmlContent] = React.useState<string | null>(null);
   const [isLoadingHtml, setIsLoadingHtml] = React.useState(false);
@@ -42,7 +43,7 @@ export default function HomeScreen() {
   const [selectedAnnotation, setSelectedAnnotation] = React.useState<Annotation | null>(null);
   const [annotationMode, setAnnotationMode] = React.useState(false);
 
-  // On web platform, fetch the HTML content using dynamic import to avoid bundling cheerio on native
+  // Phase 3: Cache HTML content on web platform
   React.useEffect(() => {
     if (!selectedResource || Platform.OS !== 'web') {
       setHtmlContent(null);
@@ -56,9 +57,22 @@ export default function HomeScreen() {
       setIsLoadingHtml(true);
       setLoadError(null);
       try {
-        // Use dynamic import to avoid bundling on native platforms
+        // Use dynamic imports for both caching and fetching
         const { fetchHtml } = await import('@/lib/dcs');
-        const html = await fetchHtml(selectedResource.url);
+        const { getWithRevalidate, getServiceContentKey, TTL } = await import('@/lib/cache');
+        
+        // Generate cache key from URL
+        const serviceId = selectedResource.url.replace(/[^a-z0-9]/gi, '_');
+        const cacheKey = getServiceContentKey(serviceId, selectedResource.language);
+        
+        // Use stale-while-revalidate for HTML content
+        const html = await getWithRevalidate(
+          cacheKey,
+          () => fetchHtml(selectedResource.url),
+          TTL.ONE_MONTH, // Cache service content for 30 days
+          true // Use FileSystem for large HTML files
+        );
+        
         if (!cancelled) {
           setHtmlContent(html);
         }
@@ -587,6 +601,11 @@ export default function HomeScreen() {
       console.log('Position:', position);
       
       if (position) {
+        // Check if any annotation features are enabled
+        if (!preferences.altarServerAnnotationsEnabled && !preferences.notesEnabled) {
+          console.log('❌ Both annotation features are disabled');
+          return;
+        }
         console.log('✅ Showing annotation selector');
         setPendingAnnotationPosition(position);
         setAnnotationSelectorVisible(true);
@@ -643,6 +662,11 @@ export default function HomeScreen() {
       console.log('📦 Parsed data:', data);
       
       if (data.type === 'longPress' && data.position) {
+        // Check if any annotation features are enabled
+        if (!preferences.altarServerAnnotationsEnabled && !preferences.notesEnabled) {
+          console.log('❌ Both annotation features are disabled');
+          return;
+        }
         console.log('✅ Long-press event detected, showing annotation selector');
         setPendingAnnotationPosition(data.position);
         setAnnotationSelectorVisible(true);
@@ -810,7 +834,7 @@ export default function HomeScreen() {
           // Original header when no content is loaded
           <View style={styles.header}>
             <View>
-              <Text style={styles.heading}>GOA Digital Chant Stand</Text>
+              <Text style={styles.heading}>Digital Chant Stand Plus</Text>
               <Text style={styles.subHeading}>Enhanced Digital Chant Stand Viewer</Text>
             </View>
           </View>
@@ -916,7 +940,6 @@ export default function HomeScreen() {
           )}
         </View>
       </SafeAreaView>
-      <ServicesOverlay />
       
       {/* Annotation Modals */}
       <AnnotationSelector
