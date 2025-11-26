@@ -8,7 +8,10 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "prebuild": "expo prebuild --clean",
+    "prebuild:ios": "expo prebuild --clean --platform ios && ./scripts/fix-ios-product-name.sh",
+    "fix-ios-name": "./scripts/fix-ios-product-name.sh"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
