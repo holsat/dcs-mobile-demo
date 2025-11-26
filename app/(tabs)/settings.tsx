@@ -1,93 +1,35 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator, TouchableOpacity, RefreshControl } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Colors } from '@/constants/theme';
-import { getCacheStats, clearCache, isOnline, CacheStats } from '@/lib/cache';
+import { IconSymbol } from '@/components/ui/icon-symbol';
+
+type SettingsItem = {
+  title: string;
+  icon: string;
+  route: string;
+  description?: string;
+};
+
+const settingsItems: SettingsItem[] = [
+  {
+    title: 'Cache & Storage',
+    icon: '💾',
+    route: '/cache-settings',
+    description: 'Manage cached content and storage',
+  },
+  // Add more settings items here in the future
+];
 
 export default function SettingsScreen() {
+  const router = useRouter();
   const colorScheme = useColorScheme();
-  const [stats, setStats] = useState<CacheStats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [clearing, setClearing] = useState(false);
-  const [online, setOnline] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-
-  const loadStats = async () => {
-    try {
-      const [cacheStats, onlineStatus] = await Promise.all([
-        getCacheStats(),
-        isOnline(),
-      ]);
-      setStats(cacheStats);
-      setOnline(onlineStatus);
-    } catch (error) {
-      console.error('Failed to load cache stats:', error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  useEffect(() => {
-    loadStats();
-  }, []);
-
-  const handleRefresh = () => {
-    setRefreshing(true);
-    loadStats();
-  };
-
-  const handleClearCache = () => {
-    Alert.alert(
-      'Clear Cache',
-      'This will remove all cached services and content. You\'ll need to re-download them when you access services again.\n\nAre you sure?',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Clear Cache',
-          style: 'destructive',
-          onPress: async () => {
-            setClearing(true);
-            try {
-              await clearCache();
-              Alert.alert('Success', 'Cache cleared successfully!');
-              await loadStats();
-            } catch (error) {
-              Alert.alert('Error', 'Failed to clear cache. Please try again.');
-              console.error('Failed to clear cache:', error);
-            } finally {
-              setClearing(false);
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const formatBytes = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
-  };
-
-  const formatDate = (timestamp: number | undefined): string => {
-    if (!timestamp) return 'N/A';
-    return new Date(timestamp).toLocaleDateString();
-  };
-
-  const totalSize = (stats?.asyncStorageSize || 0) + (stats?.fileSystemSize || 0);
+  const isDark = colorScheme === 'dark';
 
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: Colors[colorScheme ?? 'light'].background }]}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-      }
     >
       <View style={styles.content}>
         {/* Header */}
@@ -97,153 +39,41 @@ export default function SettingsScreen() {
           </Text>
         </View>
 
-        {/* Network Status */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: Colors[colorScheme ?? 'light'].text }]}>
-            Network Status
-          </Text>
-          <View style={styles.card}>
-            <View style={styles.row}>
-              <Text style={[styles.label, { color: Colors[colorScheme ?? 'light'].text }]}>
-                Connection
+        {/* Settings Menu */}
+        <View style={styles.menuContainer}>
+          {settingsItems.map((item, index) => (
+            <TouchableOpacity
+              key={index}
+              style={[
+                styles.menuItem,
+                { backgroundColor: isDark ? '#1c1c1e' : '#f3f4f6' },
+              ]}
+              onPress={() => router.push(item.route as any)}
+            >
+              <View style={styles.menuItemLeft}>
+                <Text style={styles.menuIcon}>{item.icon}</Text>
+                <View style={styles.menuTextContainer}>
+                  <Text style={[styles.menuTitle, { color: Colors[colorScheme ?? 'light'].text }]}>
+                    {item.title}
+                  </Text>
+                  {item.description && (
+                    <Text style={[styles.menuDescription, { color: Colors[colorScheme ?? 'light'].icon }]}>
+                      {item.description}
+                    </Text>
+                  )}
+                </View>
+              </View>
+              <Text style={[styles.chevron, { color: Colors[colorScheme ?? 'light'].icon }]}>
+                ›
               </Text>
-              <View style={[styles.statusBadge, { backgroundColor: online ? '#10b981' : '#ef4444' }]}>
-                <Text style={styles.statusText}>
-                  {online ? '● Online' : '● Offline'}
-                </Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* Cache Statistics */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: Colors[colorScheme ?? 'light'].text }]}>
-            Cache Statistics
-          </Text>
-          
-          {loading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={Colors[colorScheme ?? 'light'].tint} />
-            </View>
-          ) : (
-            <View style={styles.card}>
-              <View style={styles.row}>
-                <Text style={[styles.label, { color: Colors[colorScheme ?? 'light'].text }]}>
-                  Total Size
-                </Text>
-                <Text style={[styles.value, { color: Colors[colorScheme ?? 'light'].tint }]}>
-                  {formatBytes(totalSize)}
-                </Text>
-              </View>
-              
-              <View style={styles.divider} />
-              
-              <View style={styles.row}>
-                <Text style={[styles.label, { color: Colors[colorScheme ?? 'light'].text }]}>
-                  Storage Size
-                </Text>
-                <Text style={[styles.value, { color: Colors[colorScheme ?? 'light'].text }]}>
-                  {formatBytes(stats?.asyncStorageSize || 0)}
-                </Text>
-              </View>
-              
-              <View style={styles.divider} />
-              
-              <View style={styles.row}>
-                <Text style={[styles.label, { color: Colors[colorScheme ?? 'light'].text }]}>
-                  FileSystem Size
-                </Text>
-                <Text style={[styles.value, { color: Colors[colorScheme ?? 'light'].text }]}>
-                  {formatBytes(stats?.fileSystemSize || 0)}
-                </Text>
-              </View>
-              
-              <View style={styles.divider} />
-              
-              <View style={styles.row}>
-                <Text style={[styles.label, { color: Colors[colorScheme ?? 'light'].text }]}>
-                  Cached Items
-                </Text>
-                <Text style={[styles.value, { color: Colors[colorScheme ?? 'light'].text }]}>
-                  {stats?.entryCount || 0}
-                </Text>
-              </View>
-              
-              <View style={styles.divider} />
-              
-              <View style={styles.row}>
-                <Text style={[styles.label, { color: Colors[colorScheme ?? 'light'].text }]}>
-                  Oldest Entry
-                </Text>
-                <Text style={[styles.value, { color: Colors[colorScheme ?? 'light'].text }]}>
-                  {formatDate(stats?.oldestEntry)}
-                </Text>
-              </View>
-              
-              <View style={styles.divider} />
-              
-              <View style={styles.row}>
-                <Text style={[styles.label, { color: Colors[colorScheme ?? 'light'].text }]}>
-                  Newest Entry
-                </Text>
-                <Text style={[styles.value, { color: Colors[colorScheme ?? 'light'].text }]}>
-                  {formatDate(stats?.newestEntry)}
-                </Text>
-              </View>
-            </View>
-          )}
-        </View>
-
-        {/* Cache Management */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: Colors[colorScheme ?? 'light'].text }]}>
-            Cache Management
-          </Text>
-          
-          <TouchableOpacity
-            style={[styles.button, clearing && styles.buttonDisabled]}
-            onPress={handleClearCache}
-            disabled={clearing}
-          >
-            {clearing ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <Text style={styles.buttonText}>🗑️ Clear Cache</Text>
-                <Text style={styles.buttonSubtext}>
-                  Remove all cached content
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        {/* Cache Info */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: Colors[colorScheme ?? 'light'].text }]}>
-            About Cache
-          </Text>
-          <View style={styles.card}>
-            <Text style={[styles.infoText, { color: Colors[colorScheme ?? 'light'].text }]}>
-              The app caches services and content to improve performance and enable offline access.
-            </Text>
-            <Text style={[styles.infoText, { color: Colors[colorScheme ?? 'light'].text, marginTop: 12 }]}>
-              Cached data is automatically refreshed in the background when content changes.
-            </Text>
-            <Text style={[styles.infoText, { color: Colors[colorScheme ?? 'light'].text, marginTop: 12 }]}>
-              Clear the cache if you're experiencing issues or want to free up storage space.
-            </Text>
-          </View>
+            </TouchableOpacity>
+          ))}
         </View>
 
         {/* Version Info */}
         <View style={styles.footer}>
           <Text style={[styles.footerText, { color: Colors[colorScheme ?? 'light'].icon }]}>
             DCS Mobile Demo v1.0.0
-          </Text>
-          <Text style={[styles.footerText, { color: Colors[colorScheme ?? 'light'].icon }]}>
-            Cache System v2.0
           </Text>
         </View>
       </View>
@@ -335,10 +165,44 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
+  menuContainer: {
+    gap: 12,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderRadius: 12,
+  },
+  menuItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  menuIcon: {
+    fontSize: 28,
+    marginRight: 12,
+  },
+  menuTextContainer: {
+    flex: 1,
+  },
+  menuTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+  },
+  menuDescription: {
+    fontSize: 14,
+    marginTop: 2,
+  },
+  chevron: {
+    fontSize: 24,
+    fontWeight: '300',
+  },
   footer: {
     alignItems: 'center',
-    paddingVertical: 24,
-    gap: 4,
+    paddingVertical: 40,
+    marginTop: 20,
   },
   footerText: {
     fontSize: 12,

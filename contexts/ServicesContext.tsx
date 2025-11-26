@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
+import { router } from 'expo-router';
 
 import { DcsService, DcsServiceResource, fetchServiceDates, fetchServicesForDate } from '@/lib/dcs';
 
@@ -93,6 +94,17 @@ export function ServicesProvider({ children }: { children: React.ReactNode }) {
       date: selectedDate ?? '',
     });
     setIsOverlayOpen(false);
+    
+    // Force navigation to home tab when a service is selected
+    // This fixes the issue where selecting a service would navigate to Settings tab
+    try {
+      // Use setTimeout to let overlay close animation finish first
+      setTimeout(() => {
+        router.push('/(tabs)');
+      }, 100);
+    } catch (error) {
+      console.log('Navigation to home tab failed:', error);
+    }
   }, [selectedDate]);
 
   const clearSelectedResource = useCallback(() => {
