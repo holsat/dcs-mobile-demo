@@ -25,7 +25,12 @@ const settingsItems: SettingsItem[] = [
     route: '/cache-settings',
     description: 'Manage cached content and storage',
   },
-  // Add more settings items here in the future
+  {
+    title: 'About',
+    icon: 'ℹ️',
+    route: '/about',
+    description: 'App information and credits',
+  },
 ];
 
 export default function SettingsScreen() {
@@ -79,7 +84,7 @@ export default function SettingsScreen() {
         {/* Version Info */}
         <View style={styles.footer}>
           <Text style={[styles.footerText, { color: Colors[colorScheme ?? 'light'].icon }]}>
-            DCS+ (Digital Chant Stand Plus) v1.0.0
+            DCS+ (Digital Chant Stand Plus) v0.1
           </Text>
         </View>
       </View>
