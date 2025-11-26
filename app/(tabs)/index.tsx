@@ -835,7 +835,7 @@ export default function HomeScreen() {
           // Original header when no content is loaded
           <View style={styles.header}>
             <View>
-              <Text style={styles.heading}>GOA Digital Chant Stand</Text>
+              <Text style={styles.heading}>Digital Chant Stand Plus</Text>
               <Text style={styles.subHeading}>Enhanced Digital Chant Stand Viewer</Text>
             </View>
           </View>

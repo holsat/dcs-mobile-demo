@@ -79,7 +79,7 @@ export default function SettingsScreen() {
         {/* Version Info */}
         <View style={styles.footer}>
           <Text style={[styles.footerText, { color: Colors[colorScheme ?? 'light'].icon }]}>
-            DCS Mobile Demo v1.0.0
+            DCS+ (Digital Chant Stand Plus) v1.0.0
           </Text>
         </View>
       </View>

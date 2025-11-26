@@ -1,15 +1,16 @@
 {
   "expo": {
-    "name": "dcs-mobile-demo",
-    "slug": "dcs-mobile-demo",
+    "name": "DCS+",
+    "slug": "dcs-plus",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "dcsmobiledemo",
+    "scheme": "dcsplus",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.holsat.dcsplus"
     },
     "android": {
       "adaptiveIcon": {
@@ -20,7 +21,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.dcsmobiledemo"
+      "package": "com.holsat.dcsplus"
     },
     "web": {
       "output": "static",
