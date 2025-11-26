@@ -2,7 +2,6 @@ import React from 'react';
 import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { ServicesOverlay } from '@/components/ServicesOverlay';
 import { AnnotationSelector } from '@/components/AnnotationSelector';
 import { NoteViewer } from '@/components/NoteViewer';
 import { useServices } from '@/contexts/ServicesContext';
@@ -941,7 +940,6 @@ export default function HomeScreen() {
           )}
         </View>
       </SafeAreaView>
-      <ServicesOverlay />
       
       {/* Annotation Modals */}
       <AnnotationSelector

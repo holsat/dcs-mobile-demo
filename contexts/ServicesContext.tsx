@@ -3,6 +3,7 @@ import { Alert, Platform } from 'react-native';
 import { router } from 'expo-router';
 
 import { DcsService, DcsServiceResource, fetchServiceDates, fetchServicesForDate } from '@/lib/dcs';
+import { ServicesOverlay } from '@/components/ServicesOverlay';
 
 type SelectedResource = {
   url: string;
@@ -149,7 +150,12 @@ export function ServicesProvider({ children }: { children: React.ReactNode }) {
     clearSelectedResource,
   ]);
 
-  return <ServicesContext.Provider value={value}>{children}</ServicesContext.Provider>;
+  return (
+    <ServicesContext.Provider value={value}>
+      {children}
+      <ServicesOverlay />
+    </ServicesContext.Provider>
+  );
 }
 
 export function useServices() {

@@ -325,10 +325,108 @@ export default function SacramentsScreen() {
     );
   }
 
-  // Native platform - show WebView
+  // Native platform - show WebView with toolbar
   if (Platform.OS !== 'web' && WebView) {
     return (
       <SafeAreaView style={styles.container}>
+        {/* Toolbar for native */}
+        <View style={styles.toolbar}>
+          <Pressable
+            style={[styles.toolbarButton, !canGoBack && styles.toolbarButtonDisabled]}
+            onPress={handleBack}
+            disabled={!canGoBack}
+          >
+            <Text style={styles.toolbarButtonText}>←</Text>
+          </Pressable>
+
+          <Text style={styles.toolbarTitle}>Sacraments & Services</Text>
+
+          <Pressable
+            style={styles.toolbarButton}
+            onPress={() => setSearchVisible(!searchVisible)}
+          >
+            <Text style={styles.toolbarButtonText}>🔍</Text>
+          </Pressable>
+        </View>
+
+        {/* Search Bar for native */}
+        {searchVisible && (
+          <View style={styles.searchBar}>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search..."
+              value={searchQuery}
+              onChangeText={(text) => {
+                setSearchQuery(text);
+                // Trigger search immediately for native
+                if (text) {
+                  // Simplified search for native
+                  if (webViewRef.current) {
+                    const escapedText = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    const script = `
+                      (function() {
+                        // Clear previous highlights
+                        document.querySelectorAll('.search-highlight').forEach(el => {
+                          const parent = el.parentNode;
+                          if (parent) {
+                            parent.replaceChild(document.createTextNode(el.textContent || ''), el);
+                            parent.normalize();
+                          }
+                        });
+                        
+                        // Find and highlight matches
+                        const regex = new RegExp('${escapedText}', 'gi');
+                        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+                        let node;
+                        let count = 0;
+                        
+                        while (node = walker.nextNode()) {
+                          const text = node.textContent;
+                          if (regex.test(text)) {
+                            const parent = node.parentElement;
+                            if (parent && parent.tagName !== 'SCRIPT' && parent.tagName !== 'STYLE') {
+                              const newHTML = text.replace(regex, '<span class="search-highlight" style="background-color: #ffeb3b; padding: 2px;">$&</span>');
+                              const wrapper = document.createElement('div');
+                              wrapper.innerHTML = newHTML;
+                              parent.replaceChild(wrapper, node);
+                              count++;
+                            }
+                          }
+                        }
+                        
+                        // Scroll to first match
+                        const firstMatch = document.querySelector('.search-highlight');
+                        if (firstMatch) {
+                          firstMatch.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                      })();
+                    `;
+                    webViewRef.current.injectJavaScript(script);
+                  }
+                } else {
+                  // Clear highlights when search is cleared
+                  if (webViewRef.current) {
+                    const clearScript = `
+                      document.querySelectorAll('.search-highlight').forEach(el => {
+                        const parent = el.parentNode;
+                        if (parent) {
+                          parent.replaceChild(document.createTextNode(el.textContent || ''), el);
+                          parent.normalize();
+                        }
+                      });
+                    `;
+                    webViewRef.current.injectJavaScript(clearScript);
+                  }
+                }
+              }}
+              returnKeyType="search"
+            />
+            <Pressable style={styles.searchButton} onPress={() => setSearchQuery('')}>
+              <Text style={styles.searchButtonText}>✕</Text>
+            </Pressable>
+          </View>
+        )}
+
         <WebView
           ref={webViewRef}
           source={{ uri: BOOKS_INDEX_URL }}
@@ -393,6 +491,13 @@ const styles = StyleSheet.create({
   },
   toolbarButtonText: {
     fontSize: 18,
+  },
+  toolbarTitle: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: '600',
+    textAlign: 'center',
+    color: '#333',
   },
   searchBar: {
     flexDirection: 'row',
