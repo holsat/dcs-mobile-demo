@@ -10,7 +10,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "prebuild": "expo prebuild --clean",
-    "prebuild:ios": "expo prebuild --clean --platform ios && ./scripts/fix-ios-product-name.sh",
+    "prebuild:ios": "expo prebuild --clean --platform ios",
     "fix-ios-name": "./scripts/fix-ios-product-name.sh"
   },
   "dependencies": {

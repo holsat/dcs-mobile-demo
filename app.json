@@ -63,7 +63,8 @@
             "backgroundColor": "#000000"
           }
         }
-      ]
+      ],
+      "./plugins/withIOSProductName.js"
     ],
     "experiments": {
       "typedRoutes": true,
