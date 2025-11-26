@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 
 import { ICON_DEFINITIONS, NOTE_EMOJI, type IconType } from '@/types/annotations';
+import { usePreferences } from '@/contexts/PreferencesContext';
 
 type AnnotationSelectorProps = {
   visible: boolean;
@@ -26,11 +27,22 @@ export function AnnotationSelector({
   onSelectIcon,
   onCreateNote,
 }: AnnotationSelectorProps) {
-  const [mode, setMode] = useState<'choose' | 'note' | 'icons'>('choose');
+  const { preferences } = usePreferences();
+  const iconsEnabled = preferences.altarServerAnnotationsEnabled;
+  const notesEnabled = preferences.notesEnabled;
+  
+  // Determine initial mode based on what's enabled
+  const getInitialMode = (): 'choose' | 'note' | 'icons' => {
+    if (iconsEnabled && !notesEnabled) return 'icons';
+    if (!iconsEnabled && notesEnabled) return 'note';
+    return 'choose';
+  };
+  
+  const [mode, setMode] = useState<'choose' | 'note' | 'icons'>(getInitialMode());
   const [noteText, setNoteText] = useState('');
 
   const handleClose = () => {
-    setMode('choose');
+    setMode(getInitialMode());
     setNoteText('');
     onClose();
   };
@@ -66,23 +78,27 @@ export function AnnotationSelector({
               <Text style={styles.subtitle}>Choose annotation type</Text>
               
               <View style={styles.buttonGroup}>
-                <Pressable
-                  style={styles.modeButton}
-                  onPress={() => setMode('icons')}
-                >
-                  <Text style={styles.modeButtonEmoji}>🔖</Text>
-                  <Text style={styles.modeButtonLabel}>Action Icon</Text>
-                  <Text style={styles.modeButtonDesc}>Mark liturgical actions</Text>
-                </Pressable>
+                {iconsEnabled && (
+                  <Pressable
+                    style={styles.modeButton}
+                    onPress={() => setMode('icons')}
+                  >
+                    <Text style={styles.modeButtonEmoji}>🔖</Text>
+                    <Text style={styles.modeButtonLabel}>Action Icon</Text>
+                    <Text style={styles.modeButtonDesc}>Mark liturgical actions</Text>
+                  </Pressable>
+                )}
 
-                <Pressable
-                  style={styles.modeButton}
-                  onPress={() => setMode('note')}
-                >
-                  <Text style={styles.modeButtonEmoji}>{NOTE_EMOJI}</Text>
-                  <Text style={styles.modeButtonLabel}>Note</Text>
-                  <Text style={styles.modeButtonDesc}>Add a text note</Text>
-                </Pressable>
+                {notesEnabled && (
+                  <Pressable
+                    style={styles.modeButton}
+                    onPress={() => setMode('note')}
+                  >
+                    <Text style={styles.modeButtonEmoji}>{NOTE_EMOJI}</Text>
+                    <Text style={styles.modeButtonLabel}>Note</Text>
+                    <Text style={styles.modeButtonDesc}>Add a text note</Text>
+                  </Pressable>
+                )}
               </View>
 
               <Pressable style={styles.cancelButton} onPress={handleClose}>
@@ -94,9 +110,13 @@ export function AnnotationSelector({
           {mode === 'icons' && (
             <>
               <View style={styles.header}>
-                <Pressable onPress={() => setMode('choose')}>
-                  <Text style={styles.backButton}>← Back</Text>
-                </Pressable>
+                {(iconsEnabled && notesEnabled) ? (
+                  <Pressable onPress={() => setMode('choose')}>
+                    <Text style={styles.backButton}>← Back</Text>
+                  </Pressable>
+                ) : (
+                  <View style={{ width: 60 }} />
+                )}
                 <Text style={styles.title}>Select Action Icon</Text>
                 <View style={{ width: 60 }} />
               </View>
@@ -122,9 +142,13 @@ export function AnnotationSelector({
           {mode === 'note' && (
             <>
               <View style={styles.header}>
-                <Pressable onPress={() => setMode('choose')}>
-                  <Text style={styles.backButton}>← Back</Text>
-                </Pressable>
+                {(iconsEnabled && notesEnabled) ? (
+                  <Pressable onPress={() => setMode('choose')}>
+                    <Text style={styles.backButton}>← Back</Text>
+                  </Pressable>
+                ) : (
+                  <View style={{ width: 60 }} />
+                )}
                 <Text style={styles.title}>Add Note</Text>
                 <View style={{ width: 60 }} />
               </View>

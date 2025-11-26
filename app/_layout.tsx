@@ -7,6 +7,7 @@ import 'react-native-reanimated';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { ServicesProvider } from '@/contexts/ServicesContext';
 import { AnnotationsProvider } from '@/contexts/AnnotationsContext';
+import { PreferencesProvider } from '@/contexts/PreferencesContext';
 import { initCache } from '@/lib/cache';
 
 export const unstable_settings = {
@@ -24,16 +25,18 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <AnnotationsProvider>
-      <ServicesProvider>
-        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-          <Stack>
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-          </Stack>
-          <StatusBar style="auto" />
-        </ThemeProvider>
-      </ServicesProvider>
-    </AnnotationsProvider>
+    <PreferencesProvider>
+      <AnnotationsProvider>
+        <ServicesProvider>
+          <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+            <Stack>
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+            </Stack>
+            <StatusBar style="auto" />
+          </ThemeProvider>
+        </ServicesProvider>
+      </AnnotationsProvider>
+    </PreferencesProvider>
   );
 }

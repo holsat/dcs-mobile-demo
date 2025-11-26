@@ -14,6 +14,12 @@ type SettingsItem = {
 
 const settingsItems: SettingsItem[] = [
   {
+    title: 'Annotations',
+    icon: '✏️',
+    route: '/annotations-settings',
+    description: 'Configure altar server and notes features',
+  },
+  {
     title: 'Cache & Storage',
     icon: '💾',
     route: '/cache-settings',
