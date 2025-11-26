@@ -42,7 +42,7 @@ export default function HomeScreen() {
   const [selectedAnnotation, setSelectedAnnotation] = React.useState<Annotation | null>(null);
   const [annotationMode, setAnnotationMode] = React.useState(false);
 
-  // On web platform, fetch the HTML content using dynamic import to avoid bundling cheerio on native
+  // Phase 3: Cache HTML content on web platform
   React.useEffect(() => {
     if (!selectedResource || Platform.OS !== 'web') {
       setHtmlContent(null);
@@ -56,9 +56,22 @@ export default function HomeScreen() {
       setIsLoadingHtml(true);
       setLoadError(null);
       try {
-        // Use dynamic import to avoid bundling on native platforms
+        // Use dynamic imports for both caching and fetching
         const { fetchHtml } = await import('@/lib/dcs');
-        const html = await fetchHtml(selectedResource.url);
+        const { getWithRevalidate, getServiceContentKey, TTL } = await import('@/lib/cache');
+        
+        // Generate cache key from URL
+        const serviceId = selectedResource.url.replace(/[^a-z0-9]/gi, '_');
+        const cacheKey = getServiceContentKey(serviceId, selectedResource.language);
+        
+        // Use stale-while-revalidate for HTML content
+        const html = await getWithRevalidate(
+          cacheKey,
+          () => fetchHtml(selectedResource.url),
+          TTL.ONE_MONTH, // Cache service content for 30 days
+          true // Use FileSystem for large HTML files
+        );
+        
         if (!cancelled) {
           setHtmlContent(html);
         }

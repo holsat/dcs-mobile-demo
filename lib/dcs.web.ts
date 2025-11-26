@@ -1,4 +1,11 @@
 import * as cheerio from 'cheerio';
+import {
+  getServicesIndexKey,
+  getDateIndexKey,
+  getServiceContentKey,
+  getWithRevalidate,
+  TTL,
+} from './cache';
 
 export type DcsServiceResource = {
   label: string;
@@ -73,9 +80,8 @@ function normalizeLanguage(code: string): string {
   }
 }
 
-export async function fetchServiceDates(year: number): Promise<Set<string>> {
-  const html = await fetchHtml(SERVICES_INDEX_URL);
-
+// Helper to parse service dates from HTML
+function parseServiceDatesFromHtml(html: string, year: number): Set<string> {
   const matches = html.match(/indexes\/(\d{8})\.html/gi) ?? [];
   const dateSet = new Set<string>();
 
@@ -105,11 +111,29 @@ export async function fetchServiceDates(year: number): Promise<Set<string>> {
   return dateSet;
 }
 
-export async function fetchServicesForDate(isoDate: string): Promise<DcsService[]> {
-  const ymd = isoDate.replace(/-/g, '');
-  const pageUrl = `${INDEX_BASE_URL}${ymd}.html`;
+// Phase 1: Services Index Caching with Stale-While-Revalidate
+export async function fetchServiceDates(year: number): Promise<Set<string>> {
+  const cacheKey = getServicesIndexKey(year);
+  
+  // Use stale-while-revalidate pattern
+  const dates = await getWithRevalidate(
+    cacheKey,
+    async () => {
+      console.log(`📡 Fetching services index for year ${year}...`);
+      const html = await fetchHtml(SERVICES_INDEX_URL);
+      const dateSet = parseServiceDatesFromHtml(html, year);
+      return Array.from(dateSet); // Convert Set to Array for JSON serialization
+    },
+    TTL.ONE_DAY, // Cache for 24 hours
+    false // Use AsyncStorage (small data)
+  );
+  
+  return new Set(dates);
+}
 
-  const html = await fetchHtml(pageUrl);
+// Helper to parse services from HTML
+function parseServicesFromHtml(html: string, isoDate: string, pageUrl: string): DcsService[] {
+  const ymd = isoDate.replace(/-/g, '');
   const $ = cheerio.load(html);
   const services: DcsService[] = [];
 
@@ -152,5 +176,34 @@ export async function fetchServicesForDate(isoDate: string): Promise<DcsService[
     }
   });
 
+  return services;
+}
+
+// Phase 2: Date Index Pages Caching with Stale-While-Revalidate
+export async function fetchServicesForDate(isoDate: string): Promise<DcsService[]> {
+  const cacheKey = getDateIndexKey(isoDate);
+  const ymd = isoDate.replace(/-/g, '');
+  const pageUrl = `${INDEX_BASE_URL}${ymd}.html`;
+  
+  // Determine TTL based on date
+  const dateObj = new Date(isoDate);
+  const now = new Date();
+  const isPastDate = dateObj < now;
+  
+  // Past dates rarely change, cache longer
+  const ttl = isPastDate ? TTL.ONE_MONTH : TTL.ONE_WEEK;
+  
+  // Use stale-while-revalidate pattern
+  const services = await getWithRevalidate(
+    cacheKey,
+    async () => {
+      console.log(`📡 Fetching services for date ${isoDate}...`);
+      const html = await fetchHtml(pageUrl);
+      return parseServicesFromHtml(html, isoDate, pageUrl);
+    },
+    ttl,
+    false // Use AsyncStorage (small data)
+  );
+  
   return services;
 }
