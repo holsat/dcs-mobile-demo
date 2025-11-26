@@ -29,7 +29,7 @@ export default function AboutScreen() {
         <View style={styles.content}>
           {/* App Title */}
           <Text style={[styles.title, { color: Colors[colorScheme ?? 'light'].text }]}>
-            GOA Digital Chant Stand+
+            GOA Digital Chant Stand Plus
           </Text>
           <Text style={[styles.subtitle, { color: Colors[colorScheme ?? 'light'].icon }]}>
             for {platformName} {appVersion}

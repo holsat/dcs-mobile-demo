@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "DCS+",
+    "name": "DCS-Plus",
     "slug": "dcs-plus",
     "version": "0.1",
     "orientation": "portrait",
@@ -63,8 +63,7 @@
             "backgroundColor": "#000000"
           }
         }
-      ],
-      "./plugins/withIOSProductName.js"
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
