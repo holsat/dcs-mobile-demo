@@ -347,9 +347,8 @@ export default function SacramentsScreen() {
 
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <Pressable
-              style={[styles.toolbarButton, isPdfContent && styles.toolbarButtonDisabled]}
-              onPress={() => !isPdfContent && setSearchVisible(!searchVisible)}
-              disabled={isPdfContent}
+              style={styles.toolbarButton}
+              onPress={() => setSearchVisible(!searchVisible)}
             >
               <Text style={styles.toolbarButtonText}>🔍</Text>
             </Pressable>
