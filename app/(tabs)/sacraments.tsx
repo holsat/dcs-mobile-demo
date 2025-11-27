@@ -642,7 +642,17 @@ export default function SacramentsScreen() {
         <WebView
           ref={webViewRef}
           source={{ uri: BOOKS_INDEX_URL }}
+          startInLoadingState
           style={styles.webView}
+          // Allow PDFs to be displayed inline with native viewer
+          allowFileAccess={true}
+          allowFileAccessFromFileURLs={true}
+          javaScriptEnabled={true}
+          domStorageEnabled={true}
+          // iOS-specific: Allow inline media playback
+          allowsInlineMediaPlayback={true}
+          // Android-specific: Built-in zoom controls for PDFs
+          scalesPageToFit={true}
           onMessage={(event) => {
             try {
               const data = JSON.parse(event.nativeEvent.data);
