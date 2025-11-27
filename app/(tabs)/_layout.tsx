@@ -10,7 +10,7 @@ import { useServices } from '@/contexts/ServicesContext';
 
 // Custom label component for multi-line text
 const TabLabel = ({ label, color }: { label: string; color: string }) => {
-  const lines = label.split('\n');
+  const lines = label.split('|');
   return (
     <View style={{ alignItems: 'center', justifyContent: 'center' }}>
       {lines.map((line, index) => (
@@ -65,10 +65,10 @@ export default function TabLayout() {
       <Tabs.Screen
         name="sacraments"
         options={{
-          title: 'Sacraments &\nMusic',
+          title: 'Sacraments & Music',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="book.fill" color={color} />,
           tabBarLabel: ({ color }) => (
-            <TabLabel label="Sacraments &\nMusic" color={color} />
+            <TabLabel label="Sacraments|Music" color={color} />
           ),
         }}
       />

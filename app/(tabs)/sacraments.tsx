@@ -341,7 +341,7 @@ export default function SacramentsScreen() {
             <Text style={styles.toolbarButtonText}>←</Text>
           </Pressable>
 
-          <Text style={styles.toolbarTitle}>Sacraments & Services</Text>
+          <Text style={styles.toolbarTitle}>Sacraments & Music</Text>
 
           <Pressable
             style={styles.toolbarButton}
@@ -383,12 +383,13 @@ export default function SacramentsScreen() {
                           
                           // Search and highlight
                           const searchText = '${searchTerm}';
-                          const escapedText = searchText.replace(/[.*+?^${}()|\\[\\]\\\\\\\\]/g, '\\\\\\\\$&');
-                          const regex = new RegExp('(' + escapedText + ')', 'gi');
                           const bodyHTML = document.body.innerHTML;
+                          const lowerHTML = bodyHTML.toLowerCase();
+                          const lowerSearch = searchText.toLowerCase();
                           
-                          if (bodyHTML.match(regex)) {
-                            const newHTML = bodyHTML.replace(regex, '<span class="search-highlight" style="background-color: #ffeb3b; color: #000; padding: 2px; border-radius: 2px;">$1</span>');
+                          if (lowerHTML.indexOf(lowerSearch) !== -1) {
+                            const regex = new RegExp(searchText, 'gi');
+                            const newHTML = bodyHTML.replace(regex, '<span class="search-highlight" style="background-color: #ffeb3b; color: #000; padding: 2px; border-radius: 2px;">$&</span>');
                             document.body.innerHTML = newHTML;
                             
                             // Scroll to first match
