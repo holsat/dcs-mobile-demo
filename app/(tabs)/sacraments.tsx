@@ -1,6 +1,7 @@
 import React from 'react';
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, TextInput, View, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { downloadAndShareFile, getFileType, extractFilename } from '@/lib/file-download';
 
 // WebView is only available on native platforms (iOS/Android)
 const WebView = Platform.OS !== 'web' ? require('react-native-webview').WebView : null;
@@ -22,6 +23,7 @@ export default function SacramentsScreen() {
   const [iframeLoaded, setIframeLoaded] = React.useState(false);
   const [isPdfContent, setIsPdfContent] = React.useState(false);
   const [pdfSearchEnabled, setPdfSearchEnabled] = React.useState(false);
+  const [currentUrl, setCurrentUrl] = React.useState<string>('');
 
   // Load sacraments content with caching
   React.useEffect(() => {
@@ -343,12 +345,33 @@ export default function SacramentsScreen() {
 
           <Text style={styles.toolbarTitle}>Sacraments & Music</Text>
 
-          <Pressable
-            style={styles.toolbarButton}
-            onPress={() => setSearchVisible(!searchVisible)}
-          >
-            <Text style={styles.toolbarButtonText}>🔍</Text>
-          </Pressable>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <Pressable
+              style={[styles.toolbarButton, isPdfContent && styles.toolbarButtonDisabled]}
+              onPress={() => !isPdfContent && setSearchVisible(!searchVisible)}
+              disabled={isPdfContent}
+            >
+              <Text style={styles.toolbarButtonText}>🔍</Text>
+            </Pressable>
+            
+            {isPdfContent && (
+              <Pressable
+                style={styles.toolbarButton}
+                onPress={() => {
+                  const fileType = getFileType(currentUrl);
+                  if (fileType) {
+                    downloadAndShareFile({
+                      url: currentUrl,
+                      name: extractFilename(currentUrl),
+                      type: fileType,
+                    });
+                  }
+                }}
+              >
+                <Text style={styles.toolbarButtonText}>⬇️</Text>
+              </Pressable>
+            )}
+          </View>
         </View>
 
         {/* Search Bar for native */}
@@ -436,13 +459,22 @@ export default function SacramentsScreen() {
           onNavigationStateChange={(navState: any) => {
             setCanGoBack(navState.canGoBack);
             
-            // Detect if current page is a PDF
+            // Track current URL
             const url = navState.url || '';
+            setCurrentUrl(url);
+            
+            // Detect if current page is a PDF
             const isPdf = url.toLowerCase().endsWith('.pdf') || 
                           url.toLowerCase().includes('.pdf?') ||
                           url.toLowerCase().includes('application/pdf');
             
             setIsPdfContent(isPdf);
+            
+            // Clear search when navigating
+            if (searchVisible) {
+              setSearchVisible(false);
+              setSearchQuery('');
+            }
           }}
         />
       </SafeAreaView>
