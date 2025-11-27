@@ -650,6 +650,7 @@ export default function SacramentsScreen() {
         )}
 
         <WebView
+          key={directPdfUrl || 'index'} // Force remount when PDF URL changes
           ref={webViewRef}
           source={{ uri: directPdfUrl || BOOKS_INDEX_URL }}
           startInLoadingState
