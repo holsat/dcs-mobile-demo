@@ -21,6 +21,7 @@ export default function SacramentsScreen() {
   const matchElementsRef = React.useRef<HTMLElement[]>([]);
   const [iframeLoaded, setIframeLoaded] = React.useState(false);
   const [isPdfContent, setIsPdfContent] = React.useState(false);
+  const [pdfSearchEnabled, setPdfSearchEnabled] = React.useState(false);
 
   // Load sacraments content with caching
   React.useEffect(() => {
