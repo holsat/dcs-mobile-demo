@@ -41,7 +41,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="sacraments"
         options={{
-          title: 'Sacraments',
+          title: 'Sacraments & Music',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="book.fill" color={color} />,
         }}
       />
