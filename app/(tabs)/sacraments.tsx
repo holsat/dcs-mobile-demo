@@ -649,77 +649,61 @@ export default function SacramentsScreen() {
           </View>
         )}
 
-        <WebView
-          key={directPdfUrl || 'index'} // Force remount when PDF URL changes
-          ref={webViewRef}
-          source={{ uri: directPdfUrl || BOOKS_INDEX_URL }}
-          startInLoadingState
-          style={styles.webView}
-          // Allow PDFs to be displayed inline with native viewer
-          allowFileAccess={true}
-          allowFileAccessFromFileURLs={true}
-          javaScriptEnabled={true}
-          domStorageEnabled={true}
-          // iOS-specific: Allow inline media playback
-          allowsInlineMediaPlayback={true}
-          // Android-specific: Built-in zoom controls for PDFs
-          scalesPageToFit={true}
-          onMessage={(event) => {
-            try {
-              const data = JSON.parse(event.nativeEvent.data);
-              if (data.type === 'searchResults') {
-                setSearchMatchCount(data.count);
-                setCurrentSearchIndex(data.currentIndex);
+        {directPdfUrl ? (
+          // Dedicated PDF viewer - simple WebView like Services tab
+          <WebView
+            source={{ uri: directPdfUrl }}
+            startInLoadingState
+            style={styles.webView}
+          />
+        ) : (
+          // Regular browsing WebView
+          <WebView
+            ref={webViewRef}
+            source={{ uri: BOOKS_INDEX_URL }}
+            startInLoadingState
+            style={styles.webView}
+            onNavigationStateChange={(navState: any) => {
+              setCanGoBack(navState.canGoBack);
+              
+              // Track current URL
+              const url = navState.url || '';
+              setCurrentUrl(url);
+              
+              // Detect if current page is a PDF
+              const isPdf = url.toLowerCase().endsWith('.pdf') || 
+                            url.toLowerCase().includes('.pdf?') ||
+                            url.toLowerCase().includes('application/pdf');
+              
+              setIsPdfContent(isPdf);
+              
+              // Clear search when navigating
+              if (searchVisible) {
+                setSearchVisible(false);
+                setSearchQuery('');
               }
-            } catch (e) {
-              console.log('WebView message error:', e);
-            }
-          }}
-          onNavigationStateChange={(navState: any) => {
-            setCanGoBack(navState.canGoBack);
-            
-            // Track current URL
-            const url = navState.url || '';
-            setCurrentUrl(url);
-            
-            // Detect if current page is a PDF
-            const isPdf = url.toLowerCase().endsWith('.pdf') || 
-                          url.toLowerCase().includes('.pdf?') ||
-                          url.toLowerCase().includes('application/pdf');
-            
-            setIsPdfContent(isPdf);
-            
-            // If navigating to a PDF and not already displaying it directly, reload with direct source
-            if (isPdf && directPdfUrl !== url) {
-              console.log('PDF detected, reloading with direct source:', url);
-              setDirectPdfUrl(url);
-            }
-            
-            // Clear search when navigating
-            if (searchVisible) {
-              setSearchVisible(false);
-              setSearchQuery('');
-            }
-          }}
-          onShouldStartLoadWithRequest={(request) => {
-            const url = request.url || '';
-            
-            // Check if this is a PDF
-            const isPdf = url.toLowerCase().endsWith('.pdf') || 
-                          url.toLowerCase().includes('.pdf?') ||
-                          url.toLowerCase().includes('application/pdf');
-            
-            // If it's a PDF and we haven't loaded it directly yet, intercept
-            if (isPdf && directPdfUrl !== url) {
-              console.log('Intercepting PDF load:', url);
-              setDirectPdfUrl(url);
-              return false; // Prevent default navigation
-            }
-            
-            // Allow all other navigation
-            return true;
-          }}
-        />
+            }}
+            onShouldStartLoadWithRequest={(request) => {
+              const url = request.url || '';
+              
+              // Check if this is a PDF
+              const isPdf = url.toLowerCase().endsWith('.pdf') || 
+                            url.toLowerCase().includes('.pdf?') ||
+                            url.toLowerCase().includes('application/pdf');
+              
+              // If it's a PDF, show it in dedicated PDF viewer
+              if (isPdf) {
+                console.log('Intercepting PDF load:', url);
+                setDirectPdfUrl(url);
+                setIsPdfContent(true);
+                return false; // Prevent default navigation
+              }
+              
+              // Allow all other navigation
+              return true;
+            }}
+          />
+        )}
       </SafeAreaView>
     );
   }
