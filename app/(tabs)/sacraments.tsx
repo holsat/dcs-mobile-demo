@@ -25,6 +25,8 @@ export default function SacramentsScreen() {
   const [isPdfContent, setIsPdfContent] = React.useState(false);
   const [pdfSearchEnabled, setPdfSearchEnabled] = React.useState(false);
   const [currentUrl, setCurrentUrl] = React.useState<string>('');
+  const [searchMatchCount, setSearchMatchCount] = React.useState(0);
+  const [currentSearchIndex, setCurrentSearchIndex] = React.useState(0);
 
   // Load sacraments content with caching
   React.useEffect(() => {
@@ -397,7 +399,7 @@ export default function SacramentsScreen() {
                       (function() {
                         try {
                           // Clear previous highlights
-                          const oldHighlights = document.querySelectorAll('.search-highlight');
+                          const oldHighlights = document.querySelectorAll('.search-highlight, .search-highlight-current');
                           oldHighlights.forEach(el => {
                             const parent = el.parentNode;
                             if (parent) {
@@ -440,6 +442,8 @@ export default function SacramentsScreen() {
                             nodesToHighlight.push(node);
                           }
                           
+                          let totalMatches = 0;
+                          
                           // Highlight matches in collected text nodes
                           nodesToHighlight.forEach(textNode => {
                             const text = textNode.textContent;
@@ -463,6 +467,7 @@ export default function SacramentsScreen() {
                               matchSpan.style.borderRadius = '2px';
                               matchSpan.textContent = text.substring(index, index + searchText.length);
                               fragments.push(matchSpan);
+                              totalMatches++;
                               
                               lastIndex = index + searchText.length;
                               index = textLower.indexOf(searchLower, lastIndex);
@@ -481,10 +486,26 @@ export default function SacramentsScreen() {
                             }
                           });
                           
-                          // Scroll to first match
-                          const firstMatch = document.querySelector('.search-highlight');
-                          if (firstMatch) {
-                            firstMatch.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          // Highlight first match and scroll to it
+                          const allMatches = document.querySelectorAll('.search-highlight');
+                          if (allMatches.length > 0) {
+                            allMatches[0].className = 'search-highlight-current';
+                            allMatches[0].style.backgroundColor = '#ff9800';
+                            allMatches[0].style.fontWeight = 'bold';
+                            allMatches[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          }
+                          
+                          // Store matches globally for navigation
+                          window._searchMatches = Array.from(allMatches);
+                          window._currentMatchIndex = 0;
+                          
+                          // Send match count back to React Native
+                          if (window.ReactNativeWebView) {
+                            window.ReactNativeWebView.postMessage(JSON.stringify({
+                              type: 'searchResults',
+                              count: totalMatches,
+                              currentIndex: 1
+                            }));
                           }
                         } catch(e) {
                           console.log('Search error:', e.message);
@@ -511,7 +532,108 @@ export default function SacramentsScreen() {
               }}
               returnKeyType="search"
             />
-            <Pressable style={styles.searchButton} onPress={() => setSearchQuery('')}>
+            {searchMatchCount > 0 && (
+              <View style={styles.matchNavigation}>
+                <Pressable 
+                  style={styles.navButton} 
+                  onPress={() => {
+                    if (webViewRef.current) {
+                      const script = `
+                        (function() {
+                          const matches = window._searchMatches || [];
+                          if (matches.length === 0) return;
+                          
+                          const currentIndex = window._currentMatchIndex || 0;
+                          const prevIndex = currentIndex === 0 ? matches.length - 1 : currentIndex - 1;
+                          
+                          // Update highlighting
+                          matches.forEach((m, i) => {
+                            if (i === prevIndex) {
+                              m.className = 'search-highlight-current';
+                              m.style.backgroundColor = '#ff9800';
+                              m.style.fontWeight = 'bold';
+                            } else {
+                              m.className = 'search-highlight';
+                              m.style.backgroundColor = '#ffeb3b';
+                              m.style.fontWeight = 'normal';
+                            }
+                          });
+                          
+                          // Scroll to match
+                          matches[prevIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          window._currentMatchIndex = prevIndex;
+                          
+                          // Send update
+                          if (window.ReactNativeWebView) {
+                            window.ReactNativeWebView.postMessage(JSON.stringify({
+                              type: 'searchResults',
+                              count: matches.length,
+                              currentIndex: prevIndex + 1
+                            }));
+                          }
+                        })();
+                      `;
+                      webViewRef.current.injectJavaScript(script);
+                    }
+                  }}
+                >
+                  <Text style={styles.navButtonText}>↑</Text>
+                </Pressable>
+                <Text style={styles.matchCounter}>
+                  {currentSearchIndex}/{searchMatchCount}
+                </Text>
+                <Pressable 
+                  style={styles.navButton} 
+                  onPress={() => {
+                    if (webViewRef.current) {
+                      const script = `
+                        (function() {
+                          const matches = window._searchMatches || [];
+                          if (matches.length === 0) return;
+                          
+                          const currentIndex = window._currentMatchIndex || 0;
+                          const nextIndex = (currentIndex + 1) % matches.length;
+                          
+                          // Update highlighting
+                          matches.forEach((m, i) => {
+                            if (i === nextIndex) {
+                              m.className = 'search-highlight-current';
+                              m.style.backgroundColor = '#ff9800';
+                              m.style.fontWeight = 'bold';
+                            } else {
+                              m.className = 'search-highlight';
+                              m.style.backgroundColor = '#ffeb3b';
+                              m.style.fontWeight = 'normal';
+                            }
+                          });
+                          
+                          // Scroll to match
+                          matches[nextIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          window._currentMatchIndex = nextIndex;
+                          
+                          // Send update
+                          if (window.ReactNativeWebView) {
+                            window.ReactNativeWebView.postMessage(JSON.stringify({
+                              type: 'searchResults',
+                              count: matches.length,
+                              currentIndex: nextIndex + 1
+                            }));
+                          }
+                        })();
+                      `;
+                      webViewRef.current.injectJavaScript(script);
+                    }
+                  }}
+                >
+                  <Text style={styles.navButtonText}>↓</Text>
+                </Pressable>
+              </View>
+            )}
+            <Pressable style={styles.searchButton} onPress={() => {
+              setSearchQuery('');
+              setSearchMatchCount(0);
+              setCurrentSearchIndex(0);
+            }}>
               <Text style={styles.searchButtonText}>✕</Text>
             </Pressable>
           </View>
@@ -521,6 +643,17 @@ export default function SacramentsScreen() {
           ref={webViewRef}
           source={{ uri: BOOKS_INDEX_URL }}
           style={styles.webView}
+          onMessage={(event) => {
+            try {
+              const data = JSON.parse(event.nativeEvent.data);
+              if (data.type === 'searchResults') {
+                setSearchMatchCount(data.count);
+                setCurrentSearchIndex(data.currentIndex);
+              }
+            } catch (e) {
+              console.log('WebView message error:', e);
+            }
+          }}
           onNavigationStateChange={(navState: any) => {
             setCanGoBack(navState.canGoBack);
             
