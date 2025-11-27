@@ -361,45 +361,44 @@ export default function SacramentsScreen() {
               onChangeText={(text) => {
                 setSearchQuery(text);
                 // Trigger search immediately for native
-                if (text) {
-                  // Simplified search for native
+                if (text.length > 0) {
+                  // Search for native WebView
                   if (webViewRef.current) {
-                    const escapedText = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    const searchTerm = text;
                     const script = `
                       (function() {
-                        // Clear previous highlights
-                        document.querySelectorAll('.search-highlight').forEach(el => {
-                          const parent = el.parentNode;
-                          if (parent) {
-                            parent.replaceChild(document.createTextNode(el.textContent || ''), el);
-                            parent.normalize();
-                          }
-                        });
-                        
-                        // Find and highlight matches
-                        const regex = new RegExp('${escapedText}', 'gi');
-                        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-                        let node;
-                        let count = 0;
-                        
-                        while (node = walker.nextNode()) {
-                          const text = node.textContent;
-                          if (regex.test(text)) {
-                            const parent = node.parentElement;
-                            if (parent && parent.tagName !== 'SCRIPT' && parent.tagName !== 'STYLE') {
-                              const newHTML = text.replace(regex, '<span class="search-highlight" style="background-color: #ffeb3b; padding: 2px;">$&</span>');
-                              const wrapper = document.createElement('div');
-                              wrapper.innerHTML = newHTML;
-                              parent.replaceChild(wrapper, node);
-                              count++;
+                        try {
+                          // Clear previous highlights
+                          const oldHighlights = document.querySelectorAll('.search-highlight');
+                          oldHighlights.forEach(el => {
+                            const parent = el.parentNode;
+                            if (parent) {
+                              while (el.firstChild) {
+                                parent.insertBefore(el.firstChild, el);
+                              }
+                              parent.removeChild(el);
+                            }
+                          });
+                          document.normalize();
+                          
+                          // Search and highlight
+                          const searchText = '${searchTerm}';
+                          const escapedText = searchText.replace(/[.*+?^${}()|\\[\\]\\\\\\\\]/g, '\\\\\\\\$&');
+                          const regex = new RegExp('(' + escapedText + ')', 'gi');
+                          const bodyHTML = document.body.innerHTML;
+                          
+                          if (bodyHTML.match(regex)) {
+                            const newHTML = bodyHTML.replace(regex, '<span class="search-highlight" style="background-color: #ffeb3b; color: #000; padding: 2px; border-radius: 2px;">$1</span>');
+                            document.body.innerHTML = newHTML;
+                            
+                            // Scroll to first match
+                            const firstMatch = document.querySelector('.search-highlight');
+                            if (firstMatch) {
+                              firstMatch.scrollIntoView({ behavior: 'smooth', block: 'center' });
                             }
                           }
-                        }
-                        
-                        // Scroll to first match
-                        const firstMatch = document.querySelector('.search-highlight');
-                        if (firstMatch) {
-                          firstMatch.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        } catch(e) {
+                          console.log('Search error:', e.message);
                         }
                       })();
                     `;
