@@ -344,9 +344,8 @@ export default function SacramentsScreen() {
           <Text style={styles.toolbarTitle}>Sacraments & Services</Text>
 
           <Pressable
-            style={[styles.toolbarButton, isPdfContent && styles.toolbarButtonDisabled]}
-            onPress={() => !isPdfContent && setSearchVisible(!searchVisible)}
-            disabled={isPdfContent}
+            style={styles.toolbarButton}
+            onPress={() => setSearchVisible(!searchVisible)}
           >
             <Text style={styles.toolbarButtonText}>🔍</Text>
           </Pressable>
@@ -444,12 +443,6 @@ export default function SacramentsScreen() {
                           url.toLowerCase().includes('application/pdf');
             
             setIsPdfContent(isPdf);
-            
-            // Clear search when navigating to PDF
-            if (isPdf && searchVisible) {
-              setSearchVisible(false);
-              setSearchQuery('');
-            }
           }}
         />
       </SafeAreaView>
