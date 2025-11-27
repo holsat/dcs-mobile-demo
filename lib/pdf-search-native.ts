@@ -2,82 +2,156 @@
  * PDF Search Helper for Native WebView
  * 
  * This module provides PDF search functionality for native platforms (iOS/Android)
- * when PDFs are loaded in WebView. Since native WebViews render PDFs using platform
- * viewers, we inject a custom search overlay.
+ * when PDFs are loaded in WebView using the browser's native PDF.js viewer.
  */
 
 /**
- * Generate a script to detect if current page is a PDF
+ * Generate script to search within PDF using browser's built-in find functionality
  */
-export function generatePDFDetectionScript(): string {
+export function generatePDFSearchScript(searchTerm: string): string {
+  // Escape the search term for safe injection
+  const escapedTerm = searchTerm.replace(/'/g, "\\'").replace(/\n/g, '\\n');
+  
   return `
     (function() {
       try {
-        // Check if we're viewing a PDF
-        const isPDF = document.contentType === 'application/pdf' ||
-                      document.querySelector('embed[type="application/pdf"]') !== null ||
-                      window.location.href.toLowerCase().endsWith('.pdf');
+        const searchText = '${escapedTerm}';
         
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'isPDF',
-          value: isPDF
-        }));
+        // Try multiple methods to search PDF
+        
+        // Method 1: Use browser's native find API if available
+        if (window.find) {
+          // Clear any previous search
+          if (window.getSelection) {
+            window.getSelection().removeAllRanges();
+          }
+          
+          // Perform the search
+          const found = window.find(searchText, false, false, true, false, true, false);
+          
+          if (found) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'pdfSearchResult',
+              found: true,
+              method: 'window.find'
+            }));
+          } else {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'pdfSearchResult',
+              found: false,
+              method: 'window.find'
+            }));
+          }
+        } 
+        // Method 2: Try to access PDF.js viewer if embedded
+        else if (window.PDFViewerApplication) {
+          const pdfViewer = window.PDFViewerApplication;
+          if (pdfViewer.findController) {
+            pdfViewer.findController.executeCommand('find', {
+              query: searchText,
+              caseSensitive: false,
+              highlightAll: true,
+              findPrevious: false
+            });
+            
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'pdfSearchResult',
+              found: true,
+              method: 'PDFViewerApplication'
+            }));
+          }
+        }
+        // Method 3: Check if PDF is in an embed/object tag with accessible content
+        else {
+          const embeds = document.querySelectorAll('embed[type="application/pdf"], object[type="application/pdf"]');
+          if (embeds.length > 0) {
+            // Try to access the embed's document
+            const embed = embeds[0];
+            if (embed.contentDocument) {
+              const found = embed.contentDocument.body.textContent.toLowerCase().includes(searchText.toLowerCase());
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'pdfSearchResult',
+                found: found,
+                method: 'embed.textContent'
+              }));
+            } else {
+              // PDF is rendered natively, can't search
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'pdfSearchResult',
+                found: false,
+                method: 'native-viewer',
+                message: 'PDF rendered by native viewer - search not available'
+              }));
+            }
+          } else {
+            // Last resort: try to search in any text layer if PDF.js rendered it
+            const textLayers = document.querySelectorAll('.textLayer');
+            if (textLayers.length > 0) {
+              let found = false;
+              textLayers.forEach(layer => {
+                if (layer.textContent.toLowerCase().includes(searchText.toLowerCase())) {
+                  found = true;
+                  // Highlight the layer
+                  layer.style.backgroundColor = 'rgba(255, 235, 59, 0.3)';
+                }
+              });
+              
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'pdfSearchResult',
+                found: found,
+                method: 'textLayer'
+              }));
+            } else {
+              // No searchable content available
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'pdfSearchResult',
+                found: false,
+                method: 'no-text-layer',
+                message: 'PDF has no searchable text layer'
+              }));
+            }
+          }
+        }
       } catch(e) {
-        console.log('PDF detection error:', e.message);
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'pdfSearchError',
+          error: e.message
+        }));
       }
     })();
   `;
 }
 
 /**
- * Generate script to show "Search not available for PDFs" message
+ * Generate script to clear PDF search highlights
  */
-export function generatePDFSearchDisabledScript(): string {
+export function generateClearPDFSearchScript(): string {
   return `
     (function() {
       try {
-        // Create overlay for PDF search message
-        const existingOverlay = document.getElementById('pdf-search-overlay');
-        if (existingOverlay) {
-          existingOverlay.remove();
+        // Clear window.find selection
+        if (window.getSelection) {
+          window.getSelection().removeAllRanges();
         }
         
-        const overlay = document.createElement('div');
-        overlay.id = 'pdf-search-overlay';
-        overlay.style.cssText = \`
-          position: fixed;
-          top: 50%;
-          left: 50%;
-          transform: translate(-50%, -50%);
-          background: rgba(0, 0, 0, 0.8);
-          color: white;
-          padding: 20px;
-          border-radius: 10px;
-          z-index: 10000;
-          text-align: center;
-          font-family: system-ui, -apple-system, sans-serif;
-        \`;
+        // Clear PDF.js highlights
+        if (window.PDFViewerApplication && window.PDFViewerApplication.findController) {
+          window.PDFViewerApplication.findController.executeCommand('findagain', {
+            query: '',
+            caseSensitive: false
+          });
+        }
         
-        overlay.innerHTML = \`
-          <div style="font-size: 18px; margin-bottom: 10px;">📄</div>
-          <div style="font-size: 14px; margin-bottom: 10px;">
-            Search is not available for PDF files
-          </div>
-          <div style="font-size: 12px; opacity: 0.8;">
-            Use the download button to save and search in a PDF reader
-          </div>
-        \`;
+        // Clear any manual highlights we added
+        document.querySelectorAll('.textLayer').forEach(layer => {
+          layer.style.backgroundColor = '';
+        });
         
-        document.body.appendChild(overlay);
-        
-        // Auto-remove after 3 seconds
-        setTimeout(() => {
-          overlay.style.transition = 'opacity 0.3s';
-          overlay.style.opacity = '0';
-          setTimeout(() => overlay.remove(), 300);
-        }, 3000);
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'pdfSearchCleared'
+        }));
       } catch(e) {
-        console.log('PDF overlay error:', e.message);
+        console.log('Clear PDF search error:', e.message);
       }
     })();
   `;

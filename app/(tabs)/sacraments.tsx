@@ -2,7 +2,7 @@ import React from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, TextInput, View, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { downloadAndShareFile, getFileType, extractFilename } from '@/lib/file-download';
-import { generatePDFSearchDisabledScript } from '@/lib/pdf-search-native';
+import { generatePDFSearchScript, generateClearPDFSearchScript } from '@/lib/pdf-search-native';
 
 // WebView is only available on native platforms (iOS/Android)
 const WebView = Platform.OS !== 'web' ? require('react-native-webview').WebView : null;
@@ -383,15 +383,13 @@ export default function SacramentsScreen() {
               value={searchQuery}
               onChangeText={(text) => {
                 setSearchQuery(text);
-                // Check if viewing PDF - show message and don't search
-                if (isPdfContent && text.length > 0) {
-                  if (webViewRef.current) {
-                    webViewRef.current.injectJavaScript(generatePDFSearchDisabledScript());
-                  }
-                  return;
-                }
-                // Trigger search immediately for native HTML content
+                // Trigger search immediately for both HTML and PDF
                 if (text.length > 0) {
+                  // Check if viewing PDF - use PDF search
+                  if (isPdfContent && webViewRef.current) {
+                    webViewRef.current.injectJavaScript(generatePDFSearchScript(text));
+                    return;
+                  }
                   // Search for native WebView
                   if (webViewRef.current) {
                     const searchTerm = text;
