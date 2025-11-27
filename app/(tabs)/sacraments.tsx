@@ -27,6 +27,7 @@ export default function SacramentsScreen() {
   const [currentUrl, setCurrentUrl] = React.useState<string>('');
   const [searchMatchCount, setSearchMatchCount] = React.useState(0);
   const [currentSearchIndex, setCurrentSearchIndex] = React.useState(0);
+  const [directPdfUrl, setDirectPdfUrl] = React.useState<string | null>(null);
 
   // Load sacraments content with caching
   React.useEffect(() => {
@@ -83,8 +84,17 @@ export default function SacramentsScreen() {
       if (iframe && iframe.contentWindow && canGoBack) {
         iframe.contentWindow.history.back();
       }
-    } else if (Platform.OS !== 'web' && webViewRef.current && canGoBack) {
-      webViewRef.current.goBack();
+    } else if (Platform.OS !== 'web') {
+      // If we're viewing a direct PDF, go back to the index
+      if (directPdfUrl) {
+        setDirectPdfUrl(null);
+        setIsPdfContent(false);
+        return;
+      }
+      // Otherwise use webview history
+      if (webViewRef.current && canGoBack) {
+        webViewRef.current.goBack();
+      }
     }
   };
 
@@ -641,7 +651,7 @@ export default function SacramentsScreen() {
 
         <WebView
           ref={webViewRef}
-          source={{ uri: BOOKS_INDEX_URL }}
+          source={{ uri: directPdfUrl || BOOKS_INDEX_URL }}
           startInLoadingState
           style={styles.webView}
           // Allow PDFs to be displayed inline with native viewer
@@ -678,11 +688,35 @@ export default function SacramentsScreen() {
             
             setIsPdfContent(isPdf);
             
+            // If navigating to a PDF and not already displaying it directly, reload with direct source
+            if (isPdf && directPdfUrl !== url) {
+              console.log('PDF detected, reloading with direct source:', url);
+              setDirectPdfUrl(url);
+            }
+            
             // Clear search when navigating
             if (searchVisible) {
               setSearchVisible(false);
               setSearchQuery('');
             }
+          }}
+          onShouldStartLoadWithRequest={(request) => {
+            const url = request.url || '';
+            
+            // Check if this is a PDF
+            const isPdf = url.toLowerCase().endsWith('.pdf') || 
+                          url.toLowerCase().includes('.pdf?') ||
+                          url.toLowerCase().includes('application/pdf');
+            
+            // If it's a PDF and we haven't loaded it directly yet, intercept
+            if (isPdf && directPdfUrl !== url) {
+              console.log('Intercepting PDF load:', url);
+              setDirectPdfUrl(url);
+              return false; // Prevent default navigation
+            }
+            
+            // Allow all other navigation
+            return true;
           }}
         />
       </SafeAreaView>
