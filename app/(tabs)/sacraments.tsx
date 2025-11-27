@@ -2,6 +2,7 @@ import React from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, TextInput, View, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { downloadAndShareFile, getFileType, extractFilename } from '@/lib/file-download';
+import { generatePDFSearchDisabledScript } from '@/lib/pdf-search-native';
 
 // WebView is only available on native platforms (iOS/Android)
 const WebView = Platform.OS !== 'web' ? require('react-native-webview').WebView : null;
@@ -382,7 +383,14 @@ export default function SacramentsScreen() {
               value={searchQuery}
               onChangeText={(text) => {
                 setSearchQuery(text);
-                // Trigger search immediately for native
+                // Check if viewing PDF - show message and don't search
+                if (isPdfContent && text.length > 0) {
+                  if (webViewRef.current) {
+                    webViewRef.current.injectJavaScript(generatePDFSearchDisabledScript());
+                  }
+                  return;
+                }
+                // Trigger search immediately for native HTML content
                 if (text.length > 0) {
                   // Search for native WebView
                   if (webViewRef.current) {
@@ -395,30 +403,90 @@ export default function SacramentsScreen() {
                           oldHighlights.forEach(el => {
                             const parent = el.parentNode;
                             if (parent) {
-                              while (el.firstChild) {
-                                parent.insertBefore(el.firstChild, el);
-                              }
-                              parent.removeChild(el);
+                              const textNode = document.createTextNode(el.textContent || '');
+                              parent.replaceChild(textNode, el);
                             }
                           });
-                          document.normalize();
                           
-                          // Search and highlight
+                          // Normalize to merge adjacent text nodes
+                          document.body.normalize();
+                          
+                          // Search and highlight using proper DOM traversal
                           const searchText = '${searchTerm}';
-                          const bodyHTML = document.body.innerHTML;
-                          const lowerHTML = bodyHTML.toLowerCase();
-                          const lowerSearch = searchText.toLowerCase();
+                          const searchLower = searchText.toLowerCase();
                           
-                          if (lowerHTML.indexOf(lowerSearch) !== -1) {
-                            const regex = new RegExp(searchText, 'gi');
-                            const newHTML = bodyHTML.replace(regex, '<span class="search-highlight" style="background-color: #ffeb3b; color: #000; padding: 2px; border-radius: 2px;">$&</span>');
-                            document.body.innerHTML = newHTML;
-                            
-                            // Scroll to first match
-                            const firstMatch = document.querySelector('.search-highlight');
-                            if (firstMatch) {
-                              firstMatch.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          // Use TreeWalker to find text nodes only
+                          const walker = document.createTreeWalker(
+                            document.body,
+                            NodeFilter.SHOW_TEXT,
+                            {
+                              acceptNode: function(node) {
+                                // Skip script and style nodes
+                                if (node.parentElement && 
+                                    (node.parentElement.tagName === 'SCRIPT' || 
+                                     node.parentElement.tagName === 'STYLE')) {
+                                  return NodeFilter.FILTER_REJECT;
+                                }
+                                // Only accept nodes with matching text
+                                if (node.textContent.toLowerCase().indexOf(searchLower) !== -1) {
+                                  return NodeFilter.FILTER_ACCEPT;
+                                }
+                                return NodeFilter.FILTER_REJECT;
+                              }
                             }
+                          );
+                          
+                          const nodesToHighlight = [];
+                          let node;
+                          while (node = walker.nextNode()) {
+                            nodesToHighlight.push(node);
+                          }
+                          
+                          // Highlight matches in collected text nodes
+                          nodesToHighlight.forEach(textNode => {
+                            const text = textNode.textContent;
+                            const textLower = text.toLowerCase();
+                            let lastIndex = 0;
+                            const fragments = [];
+                            let index = textLower.indexOf(searchLower, lastIndex);
+                            
+                            while (index !== -1) {
+                              // Add text before match
+                              if (index > lastIndex) {
+                                fragments.push(document.createTextNode(text.substring(lastIndex, index)));
+                              }
+                              
+                              // Add highlighted match
+                              const matchSpan = document.createElement('span');
+                              matchSpan.className = 'search-highlight';
+                              matchSpan.style.backgroundColor = '#ffeb3b';
+                              matchSpan.style.color = '#000';
+                              matchSpan.style.padding = '2px';
+                              matchSpan.style.borderRadius = '2px';
+                              matchSpan.textContent = text.substring(index, index + searchText.length);
+                              fragments.push(matchSpan);
+                              
+                              lastIndex = index + searchText.length;
+                              index = textLower.indexOf(searchLower, lastIndex);
+                            }
+                            
+                            // Add remaining text
+                            if (lastIndex < text.length) {
+                              fragments.push(document.createTextNode(text.substring(lastIndex)));
+                            }
+                            
+                            // Replace text node with fragments
+                            const parent = textNode.parentNode;
+                            if (parent && fragments.length > 0) {
+                              fragments.forEach(frag => parent.insertBefore(frag, textNode));
+                              parent.removeChild(textNode);
+                            }
+                          });
+                          
+                          // Scroll to first match
+                          const firstMatch = document.querySelector('.search-highlight');
+                          if (firstMatch) {
+                            firstMatch.scrollIntoView({ behavior: 'smooth', block: 'center' });
                           }
                         } catch(e) {
                           console.log('Search error:', e.message);
