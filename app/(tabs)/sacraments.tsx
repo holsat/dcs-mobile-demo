@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, TextInput, View, Alert, Linking } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, TextInput, View, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { downloadAndShareFile, getFileType, extractFilename } from '@/lib/file-download';
 import { generatePDFSearchScript, generateClearPDFSearchScript } from '@/lib/pdf-search-native';
@@ -669,27 +669,7 @@ export default function SacramentsScreen() {
               setSearchQuery('');
             }
           }}
-          onShouldStartLoadWithRequest={(request) => {
-            const url = request.url || '';
-            
-            // Check if this is a PDF
-            const isPdf = url.toLowerCase().endsWith('.pdf') || 
-                          url.toLowerCase().includes('.pdf?') ||
-                          url.toLowerCase().includes('application/pdf');
-            
-            // If it's a PDF, open it in external browser (Safari/Chrome)
-            if (isPdf) {
-              console.log('Opening PDF in external browser:', url);
-              Linking.openURL(url).catch(err => {
-                console.error('Failed to open PDF:', err);
-                Alert.alert('Error', 'Unable to open PDF. Please try again.');
-              });
-              return false; // Prevent WebView navigation
-            }
-            
-            // Allow all other navigation
-            return true;
-          }}
+
         />
       </SafeAreaView>
     );
