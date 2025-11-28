@@ -1,12 +1,11 @@
 import React from 'react';
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, TextInput, View, Alert } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, TextInput, View, Alert, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { downloadAndShareFile, getFileType, extractFilename } from '@/lib/file-download';
 import { generatePDFSearchScript, generateClearPDFSearchScript } from '@/lib/pdf-search-native';
 
 // WebView is only available on native platforms (iOS/Android)
 const WebView = Platform.OS !== 'web' ? require('react-native-webview').WebView : null;
-const Pdf = Platform.OS !== 'web' ? require('react-native-pdf').default : null;
 
 const BOOKS_INDEX_URL = 'https://dcs.goarch.org/goa/dcs/booksindex.html';
 
@@ -28,8 +27,6 @@ export default function SacramentsScreen() {
   const [currentUrl, setCurrentUrl] = React.useState<string>('');
   const [searchMatchCount, setSearchMatchCount] = React.useState(0);
   const [currentSearchIndex, setCurrentSearchIndex] = React.useState(0);
-  const [pdfUrl, setPdfUrl] = React.useState<string | null>(null);
-  const pdfRef = React.useRef<any>(null);
 
   // Load sacraments content with caching
   React.useEffect(() => {
@@ -87,12 +84,6 @@ export default function SacramentsScreen() {
         iframe.contentWindow.history.back();
       }
     } else if (Platform.OS !== 'web') {
-      // If viewing PDF, go back to WebView
-      if (pdfUrl) {
-        setPdfUrl(null);
-        setIsPdfContent(false);
-        return;
-      }
       // Use webview history
       if (webViewRef.current && canGoBack) {
         webViewRef.current.goBack();
@@ -651,74 +642,55 @@ export default function SacramentsScreen() {
           </View>
         )}
 
-        {pdfUrl && Pdf ? (
-          // Dedicated PDF Viewer
-          <Pdf
-            ref={pdfRef}
-            source={{ uri: pdfUrl, cache: true }}
-            trustAllCerts={false}
-            style={styles.webView}
-            enablePaging
-            onLoadComplete={(numberOfPages) => {
-              console.log(`PDF loaded with ${numberOfPages} pages`);
-            }}
-            onError={(error) => {
-              console.log('PDF error:', error);
-              Alert.alert('PDF Error', 'Unable to load PDF. Please try again.');
-              setPdfUrl(null);
-            }}
-          />
-        ) : (
-          // WebView for browsing
-          <WebView
-            ref={webViewRef}
-            source={{ uri: BOOKS_INDEX_URL }}
-            startInLoadingState
-            style={styles.webView}
-            onNavigationStateChange={(navState: any) => {
-              setCanGoBack(navState.canGoBack);
-              
-              // Track current URL
-              const url = navState.url || '';
-              setCurrentUrl(url);
-              
-              // Detect if current page is a PDF
-              const isPdf = url.toLowerCase().endsWith('.pdf') || 
-                            url.toLowerCase().includes('.pdf?') ||
-                            url.toLowerCase().includes('application/pdf');
-              
-              setIsPdfContent(isPdf);
-              
-              console.log('Navigation to:', url, 'isPDF:', isPdf);
-              
-              // Clear search when navigating
-              if (searchVisible) {
-                setSearchVisible(false);
-                setSearchQuery('');
-              }
-            }}
-            onShouldStartLoadWithRequest={(request) => {
-              const url = request.url || '';
-              
-              // Check if this is a PDF
-              const isPdf = url.toLowerCase().endsWith('.pdf') || 
-                            url.toLowerCase().includes('.pdf?') ||
-                            url.toLowerCase().includes('application/pdf');
-              
-              // If it's a PDF, show it in dedicated PDF viewer
-              if (isPdf) {
-                console.log('Intercepting PDF load for dedicated viewer:', url);
-                setPdfUrl(url);
-                setIsPdfContent(true);
-                setCanGoBack(true); // Enable back button
-                return false; // Prevent default navigation
-              }
-              
-              // Allow all other navigation
-              return true;
-            }}
-          />
-        )}
+        <WebView
+          ref={webViewRef}
+          source={{ uri: BOOKS_INDEX_URL }}
+          startInLoadingState
+          style={styles.webView}
+          onNavigationStateChange={(navState: any) => {
+            setCanGoBack(navState.canGoBack);
+            
+            // Track current URL
+            const url = navState.url || '';
+            setCurrentUrl(url);
+            
+            // Detect if current page is a PDF
+            const isPdf = url.toLowerCase().endsWith('.pdf') || 
+                          url.toLowerCase().includes('.pdf?') ||
+                          url.toLowerCase().includes('application/pdf');
+            
+            setIsPdfContent(isPdf);
+            
+            console.log('Navigation to:', url, 'isPDF:', isPdf);
+            
+            // Clear search when navigating
+            if (searchVisible) {
+              setSearchVisible(false);
+              setSearchQuery('');
+            }
+          }}
+          onShouldStartLoadWithRequest={(request) => {
+            const url = request.url || '';
+            
+            // Check if this is a PDF
+            const isPdf = url.toLowerCase().endsWith('.pdf') || 
+                          url.toLowerCase().includes('.pdf?') ||
+                          url.toLowerCase().includes('application/pdf');
+            
+            // If it's a PDF, open it in external browser (Safari/Chrome)
+            if (isPdf) {
+              console.log('Opening PDF in external browser:', url);
+              Linking.openURL(url).catch(err => {
+                console.error('Failed to open PDF:', err);
+                Alert.alert('Error', 'Unable to open PDF. Please try again.');
+              });
+              return false; // Prevent WebView navigation
+            }
+            
+            // Allow all other navigation
+            return true;
+          }}
+        />
       </SafeAreaView>
     );
   }
