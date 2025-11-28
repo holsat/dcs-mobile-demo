@@ -27,7 +27,6 @@ export default function SacramentsScreen() {
   const [currentUrl, setCurrentUrl] = React.useState<string>('');
   const [searchMatchCount, setSearchMatchCount] = React.useState(0);
   const [currentSearchIndex, setCurrentSearchIndex] = React.useState(0);
-  const [directPdfUrl, setDirectPdfUrl] = React.useState<string | null>(null);
 
   // Load sacraments content with caching
   React.useEffect(() => {
@@ -85,13 +84,7 @@ export default function SacramentsScreen() {
         iframe.contentWindow.history.back();
       }
     } else if (Platform.OS !== 'web') {
-      // If we're viewing a direct PDF, go back to the index
-      if (directPdfUrl) {
-        setDirectPdfUrl(null);
-        setIsPdfContent(false);
-        return;
-      }
-      // Otherwise use webview history
+      // Use webview history
       if (webViewRef.current && canGoBack) {
         webViewRef.current.goBack();
       }
@@ -649,61 +642,34 @@ export default function SacramentsScreen() {
           </View>
         )}
 
-        {directPdfUrl ? (
-          // Dedicated PDF viewer - simple WebView like Services tab
-          <WebView
-            source={{ uri: directPdfUrl }}
-            startInLoadingState
-            style={styles.webView}
-          />
-        ) : (
-          // Regular browsing WebView
-          <WebView
-            ref={webViewRef}
-            source={{ uri: BOOKS_INDEX_URL }}
-            startInLoadingState
-            style={styles.webView}
-            onNavigationStateChange={(navState: any) => {
-              setCanGoBack(navState.canGoBack);
-              
-              // Track current URL
-              const url = navState.url || '';
-              setCurrentUrl(url);
-              
-              // Detect if current page is a PDF
-              const isPdf = url.toLowerCase().endsWith('.pdf') || 
-                            url.toLowerCase().includes('.pdf?') ||
-                            url.toLowerCase().includes('application/pdf');
-              
-              setIsPdfContent(isPdf);
-              
-              // Clear search when navigating
-              if (searchVisible) {
-                setSearchVisible(false);
-                setSearchQuery('');
-              }
-            }}
-            onShouldStartLoadWithRequest={(request) => {
-              const url = request.url || '';
-              
-              // Check if this is a PDF
-              const isPdf = url.toLowerCase().endsWith('.pdf') || 
-                            url.toLowerCase().includes('.pdf?') ||
-                            url.toLowerCase().includes('application/pdf');
-              
-              // If it's a PDF, show it in dedicated PDF viewer
-              if (isPdf) {
-                console.log('Intercepting PDF load:', url);
-                setDirectPdfUrl(url);
-                setIsPdfContent(true);
-                return false; // Prevent default navigation
-              }
-              
-              // Allow all other navigation
-              return true;
-            }}
-          />
-        )}
+        <WebView
+          ref={webViewRef}
+          source={{ uri: BOOKS_INDEX_URL }}
+          startInLoadingState
+          style={styles.webView}
+          onNavigationStateChange={(navState: any) => {
+            setCanGoBack(navState.canGoBack);
+            
+            // Track current URL
+            const url = navState.url || '';
+            setCurrentUrl(url);
+            
+            // Detect if current page is a PDF
+            const isPdf = url.toLowerCase().endsWith('.pdf') || 
+                          url.toLowerCase().includes('.pdf?') ||
+                          url.toLowerCase().includes('application/pdf');
+            
+            setIsPdfContent(isPdf);
+            
+            console.log('Navigation to:', url, 'isPDF:', isPdf);
+            
+            // Clear search when navigating
+            if (searchVisible) {
+              setSearchVisible(false);
+              setSearchQuery('');
+            }
+          }}
+        />
       </SafeAreaView>
     );
   }
