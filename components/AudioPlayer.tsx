@@ -42,17 +42,14 @@ export function AudioPlayer({ audioUrl, onClose }: AudioPlayerProps) {
 
       // Configure audio mode for proper device routing
       // This configuration routes audio to headphones/speakers (not earpiece)
-      const audioConfig = {
+      await Audio.setAudioModeAsync({
         playsInSilentModeIOS: true,
         staysActiveInBackground: false,
         interruptionModeIOS: InterruptionModeIOS.DoNotMix,
         shouldDuckAndroid: true,
         interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
         playThroughEarpieceAndroid: false,
-      };
-      console.log('Setting audio mode:', audioConfig);
-      await Audio.setAudioModeAsync(audioConfig);
-      console.log('Audio mode set successfully');
+      });
 
       // Create and load new sound
       const { sound: newSound } = await Audio.Sound.createAsync(
