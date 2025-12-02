@@ -650,8 +650,32 @@ export default function SacramentsScreen() {
           source={{ uri: BOOKS_INDEX_URL }}
           startInLoadingState
           style={styles.webView}
+          setSupportMultipleWindows={false}
+          injectedJavaScript={`
+            // Override window.open to navigate in same window
+            (function() {
+              const originalOpen = window.open;
+              window.open = function(url, target, features) {
+                if (url) {
+                  window.location.href = url;
+                }
+                return null;
+              };
+              
+              // Override links with target="_blank"
+              document.addEventListener('click', function(e) {
+                const target = e.target.closest('a');
+                if (target && target.href && (target.target === '_blank' || target.target === '_new')) {
+                  e.preventDefault();
+                  window.location.href = target.href;
+                }
+              }, true);
+            })();
+            true; // Required to signal completion
+          `}
           onShouldStartLoadWithRequest={(request: any) => {
             // Allow all navigation within the WebView instead of opening externally
+            console.log('onShouldStartLoadWithRequest:', request.url);
             return true;
           }}
           onNavigationStateChange={(navState: any) => {
