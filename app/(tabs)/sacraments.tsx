@@ -650,6 +650,10 @@ export default function SacramentsScreen() {
           source={{ uri: BOOKS_INDEX_URL }}
           startInLoadingState
           style={styles.webView}
+          onShouldStartLoadWithRequest={(request: any) => {
+            // Allow all navigation within the WebView instead of opening externally
+            return true;
+          }}
           onNavigationStateChange={(navState: any) => {
             setCanGoBack(navState.canGoBack);
             
