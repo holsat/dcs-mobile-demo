@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import Slider from '@react-native-community/slider';
-import { Audio } from 'expo-av';
+import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
 import { downloadAndShareFile, extractFilename, getFileType } from '@/lib/file-download';
 
 interface AudioPlayerProps {
@@ -41,11 +41,13 @@ export function AudioPlayer({ audioUrl, onClose }: AudioPlayerProps) {
       }
 
       // Configure audio mode for proper device routing
+      // This configuration routes audio to headphones/speakers (not earpiece)
       await Audio.setAudioModeAsync({
         playsInSilentModeIOS: true,
         staysActiveInBackground: false,
-        allowsRecordingIOS: false,
+        interruptionModeIOS: InterruptionModeIOS.DoNotMix,
         shouldDuckAndroid: true,
+        interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
         playThroughEarpieceAndroid: false,
       });
 
