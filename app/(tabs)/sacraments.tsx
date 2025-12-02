@@ -30,7 +30,7 @@ export default function SacramentsScreen() {
 
   // Load sacraments content with caching
   React.useEffect(() => {
-    if (Platform.OS !== 'web') {
+    if (Platform.OS === 'ios' || Platform.OS === 'android') {
       return;
     }
 
@@ -352,12 +352,15 @@ export default function SacramentsScreen() {
           <Text style={styles.toolbarTitle}>Sacraments & Music</Text>
 
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Pressable
-              style={styles.toolbarButton}
-              onPress={() => setSearchVisible(!searchVisible)}
-            >
-              <Text style={styles.toolbarButtonText}>🔍</Text>
-            </Pressable>
+            {/* Hide search button for PDFs - iOS WebView can't search native PDF viewer */}
+            {!isPdfContent && (
+              <Pressable
+                style={styles.toolbarButton}
+                onPress={() => setSearchVisible(!searchVisible)}
+              >
+                <Text style={styles.toolbarButtonText}>🔍</Text>
+              </Pressable>
+            )}
             
             {isPdfContent && (
               <Pressable
