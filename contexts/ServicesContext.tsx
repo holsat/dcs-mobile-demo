@@ -29,6 +29,8 @@ type ServicesContextValue = {
   selectedResource?: SelectedResource;
   selectResource: (service: DcsService, resource: DcsServiceResource) => void;
   clearSelectedResource: () => void;
+  currentAudioUrl?: string;
+  setCurrentAudioUrl: (url: string | undefined) => void;
 };
 
 const ServicesContext = createContext<ServicesContextValue | undefined>(undefined);
@@ -45,6 +47,7 @@ export function ServicesProvider({ children }: { children: React.ReactNode }) {
   const [services, setServices] = useState<DcsService[]>([]);
   const [loadingServices, setLoadingServices] = useState(false);
   const [selectedResource, setSelectedResource] = useState<SelectedResource | undefined>();
+  const [currentAudioUrl, setCurrentAudioUrl] = useState<string | undefined>();
 
   const openOverlay = useCallback(() => {
     const now = new Date();
@@ -133,6 +136,8 @@ export function ServicesProvider({ children }: { children: React.ReactNode }) {
     selectedResource,
     selectResource,
     clearSelectedResource,
+    currentAudioUrl,
+    setCurrentAudioUrl,
   }), [
     isOverlayOpen,
     openOverlay,
@@ -148,6 +153,7 @@ export function ServicesProvider({ children }: { children: React.ReactNode }) {
     selectedResource,
     selectResource,
     clearSelectedResource,
+    currentAudioUrl,
   ]);
 
   return (

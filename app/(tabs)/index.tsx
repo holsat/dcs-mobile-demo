@@ -4,16 +4,18 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AnnotationSelector } from '@/components/AnnotationSelector';
 import { NoteViewer } from '@/components/NoteViewer';
+import { AudioPlayer } from '@/components/AudioPlayer';
 import { useServices } from '@/contexts/ServicesContext';
 import { useAnnotations } from '@/contexts/AnnotationsContext';
 import { usePreferences } from '@/contexts/PreferencesContext';
 import { ICON_DEFINITIONS, NOTE_EMOJI, type IconType, type Annotation, type AnnotationPosition } from '@/types/annotations';
+import { getFileType } from '@/lib/file-download';
 
 // WebView is only available on native platforms (iOS/Android)
 const WebView = Platform.OS !== 'web' ? require('react-native-webview').WebView : null;
 
 export default function HomeScreen() {
-  const { selectedResource, openOverlay, clearSelectedResource } = useServices();
+  const { selectedResource, openOverlay, clearSelectedResource, currentAudioUrl, setCurrentAudioUrl } = useServices();
   const { 
     getAnnotationsForService, 
     addIconAnnotation, 
@@ -883,6 +885,14 @@ export default function HomeScreen() {
           </View>
         ) : null}
 
+        {/* Audio Player */}
+        {currentAudioUrl && (
+          <AudioPlayer
+            audioUrl={currentAudioUrl}
+            onClose={() => setCurrentAudioUrl(undefined)}
+          />
+        )}
+
         <View style={styles.viewer}>
           {selectedResource ? (
             Platform.OS === 'web' ? (
@@ -926,6 +936,21 @@ export default function HomeScreen() {
                 source={{ uri: selectedResource.url }}
                 startInLoadingState
                 style={styles.webview}
+                setSupportMultipleWindows={false}
+                onShouldStartLoadWithRequest={(request: any) => {
+                  const url = request.url || '';
+                  const fileType = getFileType(url);
+                  
+                  // Intercept audio URLs
+                  if (fileType === 'audio') {
+                    console.log('Intercepting audio URL:', url);
+                    setCurrentAudioUrl(url);
+                    return false; // Block navigation
+                  }
+                  
+                  // Allow other navigation
+                  return true;
+                }}
                 onNavigationStateChange={(navState: any) => {
                   setCanGoBack(navState.canGoBack);
                 }}
