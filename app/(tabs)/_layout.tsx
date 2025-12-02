@@ -21,10 +21,10 @@ const TabLabel = ({ label, color }: { label: string; color: string }) => {
           key={index}
           style={{
             color,
-            fontSize: 11,
+            fontSize: 10,
             fontWeight: '500',
             textAlign: 'center',
-            lineHeight: 13,
+            lineHeight: 12,
           }}
           numberOfLines={1}
         >

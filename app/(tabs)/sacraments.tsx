@@ -346,7 +346,7 @@ export default function SacramentsScreen() {
             onPress={handleBack}
             disabled={!canGoBack}
           >
-            <Text style={styles.toolbarButtonText}>←</Text>
+            <Text style={styles.toolbarButtonText}>← Back</Text>
           </Pressable>
 
           <Text style={styles.toolbarTitle}>Sacraments & Music</Text>
