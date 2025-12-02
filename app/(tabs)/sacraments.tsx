@@ -1,6 +1,8 @@
 import React from 'react';
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, TextInput, View, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { downloadAndShareFile, getFileType, extractFilename } from '@/lib/file-download';
+import { generatePDFSearchScript, generateClearPDFSearchScript } from '@/lib/pdf-search-native';
 
 // WebView is only available on native platforms (iOS/Android)
 const WebView = Platform.OS !== 'web' ? require('react-native-webview').WebView : null;
@@ -21,10 +23,14 @@ export default function SacramentsScreen() {
   const matchElementsRef = React.useRef<HTMLElement[]>([]);
   const [iframeLoaded, setIframeLoaded] = React.useState(false);
   const [isPdfContent, setIsPdfContent] = React.useState(false);
+  const [pdfSearchEnabled, setPdfSearchEnabled] = React.useState(false);
+  const [currentUrl, setCurrentUrl] = React.useState<string>('');
+  const [searchMatchCount, setSearchMatchCount] = React.useState(0);
+  const [currentSearchIndex, setCurrentSearchIndex] = React.useState(0);
 
   // Load sacraments content with caching
   React.useEffect(() => {
-    if (Platform.OS !== 'web') {
+    if (Platform.OS === 'ios' || Platform.OS === 'android') {
       return;
     }
 
@@ -77,8 +83,11 @@ export default function SacramentsScreen() {
       if (iframe && iframe.contentWindow && canGoBack) {
         iframe.contentWindow.history.back();
       }
-    } else if (Platform.OS !== 'web' && webViewRef.current && canGoBack) {
-      webViewRef.current.goBack();
+    } else if (Platform.OS !== 'web') {
+      // Use webview history
+      if (webViewRef.current && canGoBack) {
+        webViewRef.current.goBack();
+      }
     }
   };
 
@@ -337,18 +346,40 @@ export default function SacramentsScreen() {
             onPress={handleBack}
             disabled={!canGoBack}
           >
-            <Text style={styles.toolbarButtonText}>←</Text>
+            <Text style={styles.toolbarButtonText}>← Back</Text>
           </Pressable>
 
-          <Text style={styles.toolbarTitle}>Sacraments & Services</Text>
+          <Text style={styles.toolbarTitle}>Sacraments & Music</Text>
 
-          <Pressable
-            style={[styles.toolbarButton, isPdfContent && styles.toolbarButtonDisabled]}
-            onPress={() => !isPdfContent && setSearchVisible(!searchVisible)}
-            disabled={isPdfContent}
-          >
-            <Text style={styles.toolbarButtonText}>🔍</Text>
-          </Pressable>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {/* Hide search button for PDFs - iOS WebView can't search native PDF viewer */}
+            {!isPdfContent && (
+              <Pressable
+                style={styles.toolbarButton}
+                onPress={() => setSearchVisible(!searchVisible)}
+              >
+                <Text style={styles.toolbarButtonText}>🔍</Text>
+              </Pressable>
+            )}
+            
+            {isPdfContent && (
+              <Pressable
+                style={styles.toolbarButton}
+                onPress={() => {
+                  const fileType = getFileType(currentUrl);
+                  if (fileType) {
+                    downloadAndShareFile({
+                      url: currentUrl,
+                      name: extractFilename(currentUrl),
+                      type: fileType,
+                    });
+                  }
+                }}
+              >
+                <Text style={styles.toolbarButtonText}>⬇️</Text>
+              </Pressable>
+            )}
+          </View>
         </View>
 
         {/* Search Bar for native */}
@@ -360,46 +391,130 @@ export default function SacramentsScreen() {
               value={searchQuery}
               onChangeText={(text) => {
                 setSearchQuery(text);
-                // Trigger search immediately for native
-                if (text) {
-                  // Simplified search for native
+                // Trigger search immediately for both HTML and PDF
+                if (text.length > 0) {
+                  // Check if viewing PDF - use PDF search
+                  if (isPdfContent && webViewRef.current) {
+                    webViewRef.current.injectJavaScript(generatePDFSearchScript(text));
+                    return;
+                  }
+                  // Search for native WebView
                   if (webViewRef.current) {
-                    const escapedText = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    const searchTerm = text;
                     const script = `
                       (function() {
-                        // Clear previous highlights
-                        document.querySelectorAll('.search-highlight').forEach(el => {
-                          const parent = el.parentNode;
-                          if (parent) {
-                            parent.replaceChild(document.createTextNode(el.textContent || ''), el);
-                            parent.normalize();
-                          }
-                        });
-                        
-                        // Find and highlight matches
-                        const regex = new RegExp('${escapedText}', 'gi');
-                        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-                        let node;
-                        let count = 0;
-                        
-                        while (node = walker.nextNode()) {
-                          const text = node.textContent;
-                          if (regex.test(text)) {
-                            const parent = node.parentElement;
-                            if (parent && parent.tagName !== 'SCRIPT' && parent.tagName !== 'STYLE') {
-                              const newHTML = text.replace(regex, '<span class="search-highlight" style="background-color: #ffeb3b; padding: 2px;">$&</span>');
-                              const wrapper = document.createElement('div');
-                              wrapper.innerHTML = newHTML;
-                              parent.replaceChild(wrapper, node);
-                              count++;
+                        try {
+                          // Clear previous highlights
+                          const oldHighlights = document.querySelectorAll('.search-highlight, .search-highlight-current');
+                          oldHighlights.forEach(el => {
+                            const parent = el.parentNode;
+                            if (parent) {
+                              const textNode = document.createTextNode(el.textContent || '');
+                              parent.replaceChild(textNode, el);
                             }
+                          });
+                          
+                          // Normalize to merge adjacent text nodes
+                          document.body.normalize();
+                          
+                          // Search and highlight using proper DOM traversal
+                          const searchText = '${searchTerm}';
+                          const searchLower = searchText.toLowerCase();
+                          
+                          // Use TreeWalker to find text nodes only
+                          const walker = document.createTreeWalker(
+                            document.body,
+                            NodeFilter.SHOW_TEXT,
+                            {
+                              acceptNode: function(node) {
+                                // Skip script and style nodes
+                                if (node.parentElement && 
+                                    (node.parentElement.tagName === 'SCRIPT' || 
+                                     node.parentElement.tagName === 'STYLE')) {
+                                  return NodeFilter.FILTER_REJECT;
+                                }
+                                // Only accept nodes with matching text
+                                if (node.textContent.toLowerCase().indexOf(searchLower) !== -1) {
+                                  return NodeFilter.FILTER_ACCEPT;
+                                }
+                                return NodeFilter.FILTER_REJECT;
+                              }
+                            }
+                          );
+                          
+                          const nodesToHighlight = [];
+                          let node;
+                          while (node = walker.nextNode()) {
+                            nodesToHighlight.push(node);
                           }
-                        }
-                        
-                        // Scroll to first match
-                        const firstMatch = document.querySelector('.search-highlight');
-                        if (firstMatch) {
-                          firstMatch.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          
+                          let totalMatches = 0;
+                          
+                          // Highlight matches in collected text nodes
+                          nodesToHighlight.forEach(textNode => {
+                            const text = textNode.textContent;
+                            const textLower = text.toLowerCase();
+                            let lastIndex = 0;
+                            const fragments = [];
+                            let index = textLower.indexOf(searchLower, lastIndex);
+                            
+                            while (index !== -1) {
+                              // Add text before match
+                              if (index > lastIndex) {
+                                fragments.push(document.createTextNode(text.substring(lastIndex, index)));
+                              }
+                              
+                              // Add highlighted match
+                              const matchSpan = document.createElement('span');
+                              matchSpan.className = 'search-highlight';
+                              matchSpan.style.backgroundColor = '#ffeb3b';
+                              matchSpan.style.color = '#000';
+                              matchSpan.style.padding = '2px';
+                              matchSpan.style.borderRadius = '2px';
+                              matchSpan.textContent = text.substring(index, index + searchText.length);
+                              fragments.push(matchSpan);
+                              totalMatches++;
+                              
+                              lastIndex = index + searchText.length;
+                              index = textLower.indexOf(searchLower, lastIndex);
+                            }
+                            
+                            // Add remaining text
+                            if (lastIndex < text.length) {
+                              fragments.push(document.createTextNode(text.substring(lastIndex)));
+                            }
+                            
+                            // Replace text node with fragments
+                            const parent = textNode.parentNode;
+                            if (parent && fragments.length > 0) {
+                              fragments.forEach(frag => parent.insertBefore(frag, textNode));
+                              parent.removeChild(textNode);
+                            }
+                          });
+                          
+                          // Highlight first match and scroll to it
+                          const allMatches = document.querySelectorAll('.search-highlight');
+                          if (allMatches.length > 0) {
+                            allMatches[0].className = 'search-highlight-current';
+                            allMatches[0].style.backgroundColor = '#ff9800';
+                            allMatches[0].style.fontWeight = 'bold';
+                            allMatches[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          }
+                          
+                          // Store matches globally for navigation
+                          window._searchMatches = Array.from(allMatches);
+                          window._currentMatchIndex = 0;
+                          
+                          // Send match count back to React Native
+                          if (window.ReactNativeWebView) {
+                            window.ReactNativeWebView.postMessage(JSON.stringify({
+                              type: 'searchResults',
+                              count: totalMatches,
+                              currentIndex: 1
+                            }));
+                          }
+                        } catch(e) {
+                          console.log('Search error:', e.message);
                         }
                       })();
                     `;
@@ -423,7 +538,108 @@ export default function SacramentsScreen() {
               }}
               returnKeyType="search"
             />
-            <Pressable style={styles.searchButton} onPress={() => setSearchQuery('')}>
+            {searchMatchCount > 0 && (
+              <View style={styles.matchNavigation}>
+                <Pressable 
+                  style={styles.navButton} 
+                  onPress={() => {
+                    if (webViewRef.current) {
+                      const script = `
+                        (function() {
+                          const matches = window._searchMatches || [];
+                          if (matches.length === 0) return;
+                          
+                          const currentIndex = window._currentMatchIndex || 0;
+                          const prevIndex = currentIndex === 0 ? matches.length - 1 : currentIndex - 1;
+                          
+                          // Update highlighting
+                          matches.forEach((m, i) => {
+                            if (i === prevIndex) {
+                              m.className = 'search-highlight-current';
+                              m.style.backgroundColor = '#ff9800';
+                              m.style.fontWeight = 'bold';
+                            } else {
+                              m.className = 'search-highlight';
+                              m.style.backgroundColor = '#ffeb3b';
+                              m.style.fontWeight = 'normal';
+                            }
+                          });
+                          
+                          // Scroll to match
+                          matches[prevIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          window._currentMatchIndex = prevIndex;
+                          
+                          // Send update
+                          if (window.ReactNativeWebView) {
+                            window.ReactNativeWebView.postMessage(JSON.stringify({
+                              type: 'searchResults',
+                              count: matches.length,
+                              currentIndex: prevIndex + 1
+                            }));
+                          }
+                        })();
+                      `;
+                      webViewRef.current.injectJavaScript(script);
+                    }
+                  }}
+                >
+                  <Text style={styles.navButtonText}>↑</Text>
+                </Pressable>
+                <Text style={styles.matchCounter}>
+                  {currentSearchIndex}/{searchMatchCount}
+                </Text>
+                <Pressable 
+                  style={styles.navButton} 
+                  onPress={() => {
+                    if (webViewRef.current) {
+                      const script = `
+                        (function() {
+                          const matches = window._searchMatches || [];
+                          if (matches.length === 0) return;
+                          
+                          const currentIndex = window._currentMatchIndex || 0;
+                          const nextIndex = (currentIndex + 1) % matches.length;
+                          
+                          // Update highlighting
+                          matches.forEach((m, i) => {
+                            if (i === nextIndex) {
+                              m.className = 'search-highlight-current';
+                              m.style.backgroundColor = '#ff9800';
+                              m.style.fontWeight = 'bold';
+                            } else {
+                              m.className = 'search-highlight';
+                              m.style.backgroundColor = '#ffeb3b';
+                              m.style.fontWeight = 'normal';
+                            }
+                          });
+                          
+                          // Scroll to match
+                          matches[nextIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          window._currentMatchIndex = nextIndex;
+                          
+                          // Send update
+                          if (window.ReactNativeWebView) {
+                            window.ReactNativeWebView.postMessage(JSON.stringify({
+                              type: 'searchResults',
+                              count: matches.length,
+                              currentIndex: nextIndex + 1
+                            }));
+                          }
+                        })();
+                      `;
+                      webViewRef.current.injectJavaScript(script);
+                    }
+                  }}
+                >
+                  <Text style={styles.navButtonText}>↓</Text>
+                </Pressable>
+              </View>
+            )}
+            <Pressable style={styles.searchButton} onPress={() => {
+              setSearchQuery('');
+              setSearchMatchCount(0);
+              setCurrentSearchIndex(0);
+            }}>
               <Text style={styles.searchButtonText}>✕</Text>
             </Pressable>
           </View>
@@ -432,24 +648,59 @@ export default function SacramentsScreen() {
         <WebView
           ref={webViewRef}
           source={{ uri: BOOKS_INDEX_URL }}
+          startInLoadingState
           style={styles.webView}
+          setSupportMultipleWindows={false}
+          injectedJavaScript={`
+            // Override window.open to navigate in same window
+            (function() {
+              const originalOpen = window.open;
+              window.open = function(url, target, features) {
+                if (url) {
+                  window.location.href = url;
+                }
+                return null;
+              };
+              
+              // Override links with target="_blank"
+              document.addEventListener('click', function(e) {
+                const target = e.target.closest('a');
+                if (target && target.href && (target.target === '_blank' || target.target === '_new')) {
+                  e.preventDefault();
+                  window.location.href = target.href;
+                }
+              }, true);
+            })();
+            true; // Required to signal completion
+          `}
+          onShouldStartLoadWithRequest={(request: any) => {
+            // Allow all navigation within the WebView instead of opening externally
+            console.log('onShouldStartLoadWithRequest:', request.url);
+            return true;
+          }}
           onNavigationStateChange={(navState: any) => {
             setCanGoBack(navState.canGoBack);
             
-            // Detect if current page is a PDF
+            // Track current URL
             const url = navState.url || '';
+            setCurrentUrl(url);
+            
+            // Detect if current page is a PDF
             const isPdf = url.toLowerCase().endsWith('.pdf') || 
                           url.toLowerCase().includes('.pdf?') ||
                           url.toLowerCase().includes('application/pdf');
             
             setIsPdfContent(isPdf);
             
-            // Clear search when navigating to PDF
-            if (isPdf && searchVisible) {
+            console.log('Navigation to:', url, 'isPDF:', isPdf);
+            
+            // Clear search when navigating
+            if (searchVisible) {
               setSearchVisible(false);
               setSearchQuery('');
             }
           }}
+
         />
       </SafeAreaView>
     );
@@ -487,33 +738,35 @@ const styles = StyleSheet.create({
   },
   toolbar: {
     flexDirection: 'row',
-    backgroundColor: '#f8f9fa',
-    borderBottomWidth: 1,
-    borderBottomColor: '#dee2e6',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    gap: 8,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    backgroundColor: '#1e40af',
+    borderRadius: 12,
+    marginBottom: 12,
   },
   toolbarButton: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: '#fff',
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#dee2e6',
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
   },
   toolbarButtonDisabled: {
     opacity: 0.4,
   },
   toolbarButtonText: {
-    fontSize: 18,
+    color: '#ffffff',
+    fontWeight: '600',
+    fontSize: 14,
   },
   toolbarTitle: {
     flex: 1,
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
+    color: '#ffffff',
     textAlign: 'center',
-    color: '#333',
+    marginHorizontal: 8,
   },
   searchBar: {
     flexDirection: 'row',
