@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
+import Slider from '@react-native-community/slider';
 import { Audio } from 'expo-av';
 import { downloadAndShareFile, extractFilename, getFileType } from '@/lib/file-download';
 
@@ -14,6 +15,8 @@ export function AudioPlayer({ audioUrl, onClose }: AudioPlayerProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [volume, setVolume] = useState(1.0); // 0.0 to 1.0
+  const [isMuted, setIsMuted] = useState(false);
 
   // Load audio when URL changes
   useEffect(() => {
@@ -21,7 +24,9 @@ export function AudioPlayer({ audioUrl, onClose }: AudioPlayerProps) {
     return () => {
       // Cleanup: unload sound when component unmounts
       if (sound) {
-        sound.unloadAsync();
+        sound.unloadAsync().catch(() => {
+          // Ignore errors during cleanup
+        });
       }
     };
   }, [audioUrl]);
@@ -35,16 +40,19 @@ export function AudioPlayer({ audioUrl, onClose }: AudioPlayerProps) {
         await sound.unloadAsync();
       }
 
-      // Configure audio mode (important for iOS)
+      // Configure audio mode for proper device routing
       await Audio.setAudioModeAsync({
         playsInSilentModeIOS: true,
         staysActiveInBackground: false,
+        allowsRecordingIOS: false,
+        shouldDuckAndroid: true,
+        playThroughEarpieceAndroid: false,
       });
 
       // Create and load new sound
       const { sound: newSound } = await Audio.Sound.createAsync(
         { uri: audioUrl },
-        { shouldPlay: false },
+        { shouldPlay: false, volume: volume, isMuted: isMuted },
         onPlaybackStatusUpdate
       );
 
@@ -79,11 +87,39 @@ export function AudioPlayer({ audioUrl, onClose }: AudioPlayerProps) {
   };
 
   const handleClose = async () => {
-    if (sound) {
-      await sound.stopAsync();
-      await sound.unloadAsync();
+    try {
+      if (sound) {
+        await sound.stopAsync().catch(() => {});
+        await sound.unloadAsync().catch(() => {});
+        setSound(null);
+      }
+    } catch (error) {
+      console.log('Error closing audio player (ignored):', error);
     }
     onClose();
+  };
+
+  const handleVolumeChange = async (newVolume: number) => {
+    setVolume(newVolume);
+    if (sound) {
+      try {
+        await sound.setVolumeAsync(newVolume);
+      } catch (error) {
+        console.error('Error setting volume:', error);
+      }
+    }
+  };
+
+  const handleToggleMute = async () => {
+    const newMuted = !isMuted;
+    setIsMuted(newMuted);
+    if (sound) {
+      try {
+        await sound.setIsMutedAsync(newMuted);
+      } catch (error) {
+        console.error('Error toggling mute:', error);
+      }
+    }
   };
 
   const handleDownload = () => {
@@ -145,10 +181,31 @@ export function AudioPlayer({ audioUrl, onClose }: AudioPlayerProps) {
           <Text style={styles.timeText}>{formatTime(duration)}</Text>
         </View>
 
+        {/* Mute Button */}
+        <Pressable style={styles.controlButton} onPress={handleToggleMute}>
+          <Text style={styles.controlButtonText}>{isMuted ? '🔇' : '🔊'}</Text>
+        </Pressable>
+
         {/* Download Button */}
         <Pressable style={styles.controlButton} onPress={handleDownload}>
           <Text style={styles.controlButtonText}>⬇️</Text>
         </Pressable>
+      </View>
+
+      {/* Volume Control */}
+      <View style={styles.volumeContainer}>
+        <Text style={styles.volumeLabel}>Volume</Text>
+        <Slider
+          style={styles.volumeSlider}
+          minimumValue={0}
+          maximumValue={1}
+          value={volume}
+          onValueChange={handleVolumeChange}
+          minimumTrackTintColor="#ffffff"
+          maximumTrackTintColor="rgba(255, 255, 255, 0.3)"
+          thumbTintColor="#ffffff"
+        />
+        <Text style={styles.volumeText}>{Math.round(volume * 100)}%</Text>
       </View>
     </View>
   );
@@ -234,5 +291,28 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: '#ffffff',
     borderRadius: 2,
+  },
+  volumeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 8,
+  },
+  volumeLabel: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '500',
+    minWidth: 50,
+  },
+  volumeSlider: {
+    flex: 1,
+    height: 40,
+  },
+  volumeText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '500',
+    minWidth: 40,
+    textAlign: 'right',
   },
 });
