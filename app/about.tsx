@@ -49,9 +49,9 @@ export default function AboutScreen() {
             </Text>
             <Text
               style={[styles.link, { color: '#007AFF' }]}
-              onPress={() => Linking.openURL('mailto:dcsplus@gmail.com')}
+              onPress={() => Linking.openURL('mailto:digitalchantstandplus@gmail.com')}
             >
-              dcsplus@gmail.com
+              digitalchantstandplus@gmail.com
             </Text>
           </View>
 
