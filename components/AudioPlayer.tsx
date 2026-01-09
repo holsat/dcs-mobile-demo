@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import Slider from '@react-native-community/slider';
-import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
+import { Audio, InterruptionModeIOS, InterruptionModeAndroid, AVPlaybackStatus } from 'expo-av';
 import { downloadAndShareFile, extractFilename, getFileType } from '@/lib/file-download';
+import { cacheAsset, getCache, getAssetKey } from '@/lib/cache';
 
 interface AudioPlayerProps {
   audioUrl: string;
@@ -15,18 +16,16 @@ export function AudioPlayer({ audioUrl, onClose }: AudioPlayerProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [volume, setVolume] = useState(1.0); // 0.0 to 1.0
+  const [volume, setVolume] = useState(1.0);
   const [isMuted, setIsMuted] = useState(false);
+  const [hasFinished, setHasFinished] = useState(false);
 
   // Load audio when URL changes
   useEffect(() => {
     loadAudio();
     return () => {
-      // Cleanup: unload sound when component unmounts
       if (sound) {
-        sound.unloadAsync().catch(() => {
-          // Ignore errors during cleanup
-        });
+        sound.unloadAsync().catch(() => {});
       }
     };
   }, [audioUrl]);
@@ -35,13 +34,11 @@ export function AudioPlayer({ audioUrl, onClose }: AudioPlayerProps) {
     try {
       setIsLoading(true);
       
-      // Unload previous sound if exists
       if (sound) {
         await sound.unloadAsync();
       }
 
       // Configure audio mode for proper device routing
-      // This configuration routes audio to headphones/speakers (not earpiece)
       await Audio.setAudioModeAsync({
         playsInSilentModeIOS: true,
         staysActiveInBackground: false,
@@ -51,10 +48,27 @@ export function AudioPlayer({ audioUrl, onClose }: AudioPlayerProps) {
         playThroughEarpieceAndroid: false,
       });
 
-      // Create and load new sound
+      // Try to load from cache first, otherwise cache and load
+      let audioSource: string = audioUrl;
+      
+      // Check if audio is already cached
+      const cacheKey = getAssetKey(audioUrl);
+      const cached = await getCache<string>(cacheKey);
+      
+      if (cached && !cached.data.startsWith('http')) {
+        // Use cached local file
+        console.log('Loading audio from cache:', cached.data);
+        audioSource = cached.data;
+      } else {
+        // Cache the audio file first
+        console.log('Caching audio file:', audioUrl);
+        audioSource = await cacheAsset(audioUrl);
+        console.log('Audio cached, loading from:', audioSource);
+      }
+
       const { sound: newSound } = await Audio.Sound.createAsync(
-        { uri: audioUrl },
-        { shouldPlay: false, volume: volume, isMuted: isMuted },
+        { uri: audioSource },
+        { shouldPlay: false, volume, isMuted },
         onPlaybackStatusUpdate
       );
 
@@ -66,11 +80,26 @@ export function AudioPlayer({ audioUrl, onClose }: AudioPlayerProps) {
     }
   };
 
-  const onPlaybackStatusUpdate = (status: any) => {
+  const onPlaybackStatusUpdate = (status: AVPlaybackStatus) => {
     if (status.isLoaded) {
-      setPosition(status.positionMillis || 0);
-      setDuration(status.durationMillis || 0);
+      const pos = status.positionMillis / 1000;
+      
+      // For streaming audio, durationMillis may be undefined
+      // So we capture it when the audio finishes playing
+      if (status.durationMillis) {
+        setDuration(status.durationMillis / 1000);
+      } else if (status.didJustFinish && pos > 0) {
+        // When audio finishes, the position is the duration
+        setDuration(pos);
+      }
+      
+      setPosition(pos);
       setIsPlaying(status.isPlaying || false);
+      
+      if (status.didJustFinish) {
+        setHasFinished(true);
+        setIsPlaying(false);
+      }
     }
   };
 
@@ -78,7 +107,12 @@ export function AudioPlayer({ audioUrl, onClose }: AudioPlayerProps) {
     if (!sound) return;
 
     try {
-      if (isPlaying) {
+      if (hasFinished) {
+        // Replay from beginning
+        setHasFinished(false);
+        await sound.setPositionAsync(0);
+        await sound.playAsync();
+      } else if (isPlaying) {
         await sound.pauseAsync();
       } else {
         await sound.playAsync();
@@ -124,6 +158,21 @@ export function AudioPlayer({ audioUrl, onClose }: AudioPlayerProps) {
     }
   };
 
+  const handleSeekComplete = async (value: number) => {
+    if (!sound || duration === 0) return;
+    
+    try {
+      const seekPosition = value * duration * 1000; // Convert to milliseconds
+      await sound.setPositionAsync(seekPosition);
+      // Reset finished state when seeking
+      if (hasFinished) {
+        setHasFinished(false);
+      }
+    } catch (error) {
+      console.error('Error seeking audio:', error);
+    }
+  };
+
   const handleDownload = () => {
     const fileType = getFileType(audioUrl);
     if (fileType) {
@@ -135,11 +184,12 @@ export function AudioPlayer({ audioUrl, onClose }: AudioPlayerProps) {
     }
   };
 
-  const formatTime = (millis: number) => {
-    const totalSeconds = Math.floor(millis / 1000);
+  const formatTime = (seconds: number) => {
+    if (!seconds || isNaN(seconds) || seconds === 0) return '0:00';
+    const totalSeconds = Math.floor(seconds);
     const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    const secs = totalSeconds % 60;
+    return `${minutes}:${secs.toString().padStart(2, '0')}`;
   };
 
   const filename = extractFilename(audioUrl);
@@ -156,30 +206,31 @@ export function AudioPlayer({ audioUrl, onClose }: AudioPlayerProps) {
       </View>
 
       <View style={styles.controls}>
-        {/* Play/Pause Button */}
+        {/* Play/Pause/Replay Button */}
         <Pressable
           style={[styles.controlButton, styles.playButton]}
           onPress={handlePlayPause}
           disabled={isLoading}
         >
           <Text style={styles.controlButtonText}>
-            {isLoading ? '...' : isPlaying ? '⏸' : '▶️'}
+            {isLoading ? '...' : hasFinished ? '↻' : isPlaying ? '⏸' : '▶️'}
           </Text>
         </Pressable>
 
-        {/* Time Display */}
+        {/* Time Display with Seekable Progress Bar */}
         <View style={styles.timeContainer}>
           <Text style={styles.timeText}>{formatTime(position)}</Text>
-          <View style={styles.progressBarContainer}>
-            <View style={styles.progressBarBackground}>
-              <View
-                style={[
-                  styles.progressBarFill,
-                  { width: duration > 0 ? `${(position / duration) * 100}%` : '0%' },
-                ]}
-              />
-            </View>
-          </View>
+          <Slider
+            style={styles.progressSlider}
+            minimumValue={0}
+            maximumValue={1}
+            value={duration > 0 ? position / duration : 0}
+            onSlidingComplete={handleSeekComplete}
+            minimumTrackTintColor="#ffffff"
+            maximumTrackTintColor="rgba(255, 255, 255, 0.3)"
+            thumbTintColor="#ffffff"
+            disabled={isLoading || duration === 0}
+          />
           <Text style={styles.timeText}>{formatTime(duration)}</Text>
         </View>
 
@@ -225,6 +276,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5,
+    zIndex: 1000,
   },
   header: {
     flexDirection: 'row',
@@ -273,6 +325,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    height: 40,
   },
   timeText: {
     color: '#ffffff',
@@ -280,19 +333,9 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     minWidth: 40,
   },
-  progressBarContainer: {
+  progressSlider: {
     flex: 1,
-  },
-  progressBarBackground: {
-    height: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: '#ffffff',
-    borderRadius: 2,
+    height: 40,
   },
   volumeContainer: {
     flexDirection: 'row',
