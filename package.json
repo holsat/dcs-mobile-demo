@@ -11,7 +11,8 @@
     "lint": "expo lint",
     "prebuild": "expo prebuild --clean",
     "prebuild:ios": "expo prebuild --clean --platform ios",
-    "fix-ios-name": "./scripts/fix-ios-product-name.sh"
+    "fix-ios-name": "./scripts/fix-ios-product-name.sh",
+    "build:aab:prod": "node bump_and_build.js"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
