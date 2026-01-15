@@ -16,6 +16,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.holsat.dcsplus",
+      "buildNumber": "3",
       "splash": {
         "image": "./assets/images/splash-icon.png",
         "resizeMode": "contain",

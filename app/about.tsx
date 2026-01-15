@@ -4,16 +4,19 @@ import { Stack } from 'expo-router';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Colors } from '@/constants/theme';
 import Constants from 'expo-constants';
+import * as Application from 'expo-application';
 
 export default function AboutScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  
+
   // Get platform name
-  const platformName = Platform.OS === 'ios' ? 'iOS' : Platform.OS === 'android' ? 'Android' : 'Web';
-  
-  // Get app version from app.json via Constants
+  const platformName =
+    Platform.OS === 'ios' ? 'iOS' : Platform.OS === 'android' ? 'Android' : 'Web';
+
+  // Get app version from app.json and native build number from Xcode project (Info.plist CFBundleVersion)
   const appVersion = Constants.expoConfig?.version || '0.1';
+  const buildNumber = Application.nativeBuildVersion || '1';
 
   return (
     <>
@@ -32,9 +35,9 @@ export default function AboutScreen() {
             GOA Digital Chant Stand Plus
           </Text>
           <Text style={[styles.subtitle, { color: Colors[colorScheme ?? 'light'].icon }]}>
-            for {platformName} {appVersion}
+            for {platformName} {appVersion} ({buildNumber})
           </Text>
-          
+
           {/* DCS+ Application Info */}
           <View style={styles.section}>
             <Text style={[styles.body, { color: Colors[colorScheme ?? 'light'].text }]}>
@@ -66,8 +69,17 @@ export default function AboutScreen() {
             <Text style={[styles.body, { color: Colors[colorScheme ?? 'light'].text }]}>
               © 2025 Greek Orthodox Archdiocese of America
             </Text>
-            <Text style={[styles.body, { color: Colors[colorScheme ?? 'light'].text }, styles.marginTop]}>
-              AGES Initiatives is now a part of the Greek Orthodox Archdiocese of America. The Digital Chant Stand of the Greek Orthodox Archdiocese of America will continue to provide resources intended to enhance the worship experience of the Orthodox faithful with easily accessible liturgical texts and music.
+            <Text
+              style={[
+                styles.body,
+                { color: Colors[colorScheme ?? 'light'].text },
+                styles.marginTop,
+              ]}
+            >
+              AGES Initiatives is now a part of the Greek Orthodox Archdiocese of America. The
+              Digital Chant Stand of the Greek Orthodox Archdiocese of America will continue to
+              provide resources intended to enhance the worship experience of the Orthodox faithful
+              with easily accessible liturgical texts and music.
             </Text>
           </View>
 
@@ -94,13 +106,29 @@ export default function AboutScreen() {
           {/* Scripture Versions */}
           <View style={styles.section}>
             <Text style={[styles.body, { color: Colors[colorScheme ?? 'light'].text }]}>
-              NKJV Scripture taken from the New King James Version™. Copyright © 1982 by Thomas Nelson, Inc. Used by permission. All rights reserved.
+              NKJV Scripture taken from the New King James Version™. Copyright © 1982 by Thomas
+              Nelson, Inc. Used by permission. All rights reserved.
             </Text>
-            <Text style={[styles.body, { color: Colors[colorScheme ?? 'light'].text }, styles.marginTop]}>
-              RSV Revised Standard Version of the Bible, copyright © 1946, 1952, and 1971 National Council of the Churches of Christ in the United States of America. Used by permission. All rights reserved.
+            <Text
+              style={[
+                styles.body,
+                { color: Colors[colorScheme ?? 'light'].text },
+                styles.marginTop,
+              ]}
+            >
+              RSV Revised Standard Version of the Bible, copyright © 1946, 1952, and 1971 National
+              Council of the Churches of Christ in the United States of America. Used by permission.
+              All rights reserved.
             </Text>
-            <Text style={[styles.body, { color: Colors[colorScheme ?? 'light'].text }, styles.marginTop]}>
-              SAAS Scripture taken from the St. Athanasius Academy Septuagint™. Copyright © 2008 by St. Athanasius Academy of Orthodox Theology. Used by permission. All rights reserved.
+            <Text
+              style={[
+                styles.body,
+                { color: Colors[colorScheme ?? 'light'].text },
+                styles.marginTop,
+              ]}
+            >
+              SAAS Scripture taken from the St. Athanasius Academy Septuagint™. Copyright © 2008 by
+              St. Athanasius Academy of Orthodox Theology. Used by permission. All rights reserved.
             </Text>
           </View>
 
@@ -110,10 +138,25 @@ export default function AboutScreen() {
               Disclaimer
             </Text>
             <Text style={[styles.body, { color: Colors[colorScheme ?? 'light'].text }]}>
-              The translations, rubrics, Greek and English texts are for the purposes of worship only and are subject to change without notice at the discretion of the Greek Orthodox Archdiocese of America.
+              The translations, rubrics, Greek and English texts are for the purposes of worship
+              only and are subject to change without notice at the discretion of the Greek Orthodox
+              Archdiocese of America.
             </Text>
-            <Text style={[styles.body, { color: Colors[colorScheme ?? 'light'].text }, styles.marginTop]}>
-              All rights reserved. The content contained herein remains the property of all contributing translators. It is published solely for the purpose of providing a source of worship materials to the parishes of the Orthodox Church and may be copied and otherwise reproduced as needed by the parish toward this end; however, it may not be reprinted, reproduced, transmitted, stored in a retrieval system, or translated into any language in any form by any means—electronic, mechanical, recording, or otherwise—for the purpose of sale without the express written permission of the Greek Orthodox Archdiocese of America.
+            <Text
+              style={[
+                styles.body,
+                { color: Colors[colorScheme ?? 'light'].text },
+                styles.marginTop,
+              ]}
+            >
+              All rights reserved. The content contained herein remains the property of all
+              contributing translators. It is published solely for the purpose of providing a source
+              of worship materials to the parishes of the Orthodox Church and may be copied and
+              otherwise reproduced as needed by the parish toward this end; however, it may not be
+              reprinted, reproduced, transmitted, stored in a retrieval system, or translated into
+              any language in any form by any means—electronic, mechanical, recording, or
+              otherwise—for the purpose of sale without the express written permission of the Greek
+              Orthodox Archdiocese of America.
             </Text>
           </View>
 
@@ -150,10 +193,22 @@ export default function AboutScreen() {
             <Text style={[styles.body, { color: Colors[colorScheme ?? 'light'].text }]}>
               Font copyright © 2010 Google Corporation with Reserved Font Arimo, Tinos and Cousine.
             </Text>
-            <Text style={[styles.body, { color: Colors[colorScheme ?? 'light'].text }, styles.marginTop]}>
+            <Text
+              style={[
+                styles.body,
+                { color: Colors[colorScheme ?? 'light'].text },
+                styles.marginTop,
+              ]}
+            >
               Copyright © 2012 Red Hat, Inc. with Reserved Font Name Liberation.
             </Text>
-            <Text style={[styles.body, { color: Colors[colorScheme ?? 'light'].text }, styles.marginTop]}>
+            <Text
+              style={[
+                styles.body,
+                { color: Colors[colorScheme ?? 'light'].text },
+                styles.marginTop,
+              ]}
+            >
               This Font Software is licensed under the SIL Open Font License, Version 1.1.
             </Text>
           </View>

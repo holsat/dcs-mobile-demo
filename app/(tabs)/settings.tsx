@@ -4,6 +4,8 @@ import { useRouter } from 'expo-router';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Colors } from '@/constants/theme';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import Constants from 'expo-constants';
+import * as Application from 'expo-application';
 
 type SettingsItem = {
   title: string;
@@ -38,6 +40,10 @@ export default function SettingsScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
+  // Get app version from app.json and native build number from Xcode project (Info.plist CFBundleVersion)
+  const appVersion = Constants.expoConfig?.version || '0.1';
+  const buildNumber = Application.nativeBuildVersion || '1';
+
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: Colors[colorScheme ?? 'light'].background }]}
@@ -55,10 +61,7 @@ export default function SettingsScreen() {
           {settingsItems.map((item, index) => (
             <TouchableOpacity
               key={index}
-              style={[
-                styles.menuItem,
-                { backgroundColor: isDark ? '#1c1c1e' : '#f3f4f6' },
-              ]}
+              style={[styles.menuItem, { backgroundColor: isDark ? '#1c1c1e' : '#f3f4f6' }]}
               onPress={() => router.push(item.route as any)}
             >
               <View style={styles.menuItemLeft}>
@@ -68,7 +71,12 @@ export default function SettingsScreen() {
                     {item.title}
                   </Text>
                   {item.description && (
-                    <Text style={[styles.menuDescription, { color: Colors[colorScheme ?? 'light'].icon }]}>
+                    <Text
+                      style={[
+                        styles.menuDescription,
+                        { color: Colors[colorScheme ?? 'light'].icon },
+                      ]}
+                    >
                       {item.description}
                     </Text>
                   )}
@@ -84,7 +92,7 @@ export default function SettingsScreen() {
         {/* Version Info */}
         <View style={styles.footer}>
           <Text style={[styles.footerText, { color: Colors[colorScheme ?? 'light'].icon }]}>
-            DCS+ (Digital Chant Stand Plus) v0.1
+            DCS+ (Digital Chant Stand Plus) v{appVersion} ({buildNumber})
           </Text>
         </View>
       </View>
