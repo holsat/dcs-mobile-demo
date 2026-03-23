@@ -13,7 +13,7 @@ const TabLabel = ({ label, color }: { label: string; color: string }) => {
   // Split "Sacraments & Music" into ["Sacraments &", "Music"]
   const parts = label.split(' & ');
   const lines = parts.length > 1 ? [parts[0] + ' &', parts[1]] : [label];
-  
+
   return (
     <View style={{ alignItems: 'center', justifyContent: 'center', maxWidth: 60 }}>
       {lines.map((line, index) => (
@@ -45,12 +45,19 @@ export default function TabLayout() {
         tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
         headerShown: false,
         tabBarButton: HapticTab,
-      }}>
+      }}
+    >
       <Tabs.Screen
         name="index"
         options={{
           title: 'Home',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+        }}
+        listeners={{
+          tabPress: (event) => {
+            event.preventDefault();
+            openOverlay();
+          },
         }}
       />
       <Tabs.Screen
@@ -71,9 +78,7 @@ export default function TabLayout() {
         options={{
           title: 'Sacraments & Music',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="book.fill" color={color} />,
-          tabBarLabel: ({ color }) => (
-            <TabLabel label="Sacraments & Music" color={color} />
-          ),
+          tabBarLabel: ({ color }) => <TabLabel label="Sacraments & Music" color={color} />,
         }}
       />
       <Tabs.Screen

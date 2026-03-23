@@ -1,5 +1,14 @@
 import React from 'react';
-import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AnnotationSelector } from '@/components/AnnotationSelector';
@@ -8,23 +17,36 @@ import { AudioPlayer } from '@/components/AudioPlayer';
 import { useServices } from '@/contexts/ServicesContext';
 import { useAnnotations } from '@/contexts/AnnotationsContext';
 import { usePreferences } from '@/contexts/PreferencesContext';
-import { ICON_DEFINITIONS, NOTE_EMOJI, type IconType, type Annotation, type AnnotationPosition } from '@/types/annotations';
+import {
+  ICON_DEFINITIONS,
+  NOTE_EMOJI,
+  type IconType,
+  type Annotation,
+  type AnnotationPosition,
+} from '@/types/annotations';
 import { getFileType } from '@/lib/file-download';
 
 // WebView is only available on native platforms (iOS/Android)
 const WebView = Platform.OS !== 'web' ? require('react-native-webview').WebView : null;
 
 export default function HomeScreen() {
-  const { selectedResource, openOverlay, clearSelectedResource, currentAudioUrl, setCurrentAudioUrl } = useServices();
-  const { 
-    getAnnotationsForService, 
-    addIconAnnotation, 
-    addNoteAnnotation, 
-    updateNoteAnnotation, 
-    removeAnnotation 
+  const {
+    selectedResource,
+    openOverlay,
+    clearSelectedResource,
+    currentAudioUrl,
+    setCurrentAudioUrl,
+    isOverlayOpen,
+  } = useServices();
+  const {
+    getAnnotationsForService,
+    addIconAnnotation,
+    addNoteAnnotation,
+    updateNoteAnnotation,
+    removeAnnotation,
   } = useAnnotations();
   const { preferences } = usePreferences();
-  
+
   const [htmlContent, setHtmlContent] = React.useState<string | null>(null);
   const [isLoadingHtml, setIsLoadingHtml] = React.useState(false);
   const [loadError, setLoadError] = React.useState<string | null>(null);
@@ -33,17 +55,27 @@ export default function HomeScreen() {
   const iframeRef = React.useRef<HTMLIFrameElement>(null);
   const webViewRef = React.useRef<any>(null);
   const [canGoBack, setCanGoBack] = React.useState(false);
+  const backPressedRef = React.useRef(false);
+  const backTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const [matchCount, setMatchCount] = React.useState(0);
   const [currentMatchIndex, setCurrentMatchIndex] = React.useState(0);
   const matchElementsRef = React.useRef<HTMLElement[]>([]);
   const [iframeLoaded, setIframeLoaded] = React.useState(false);
-  
+
   // Annotation state
   const [annotationSelectorVisible, setAnnotationSelectorVisible] = React.useState(false);
-  const [pendingAnnotationPosition, setPendingAnnotationPosition] = React.useState<AnnotationPosition | null>(null);
+  const [pendingAnnotationPosition, setPendingAnnotationPosition] =
+    React.useState<AnnotationPosition | null>(null);
   const [noteViewerVisible, setNoteViewerVisible] = React.useState(false);
   const [selectedAnnotation, setSelectedAnnotation] = React.useState<Annotation | null>(null);
   const [annotationMode, setAnnotationMode] = React.useState(false);
+
+  // Auto-open service selector on first mount if no service is selected
+  React.useEffect(() => {
+    if (!selectedResource) {
+      openOverlay();
+    }
+  }, []);
 
   // Phase 3: Cache HTML content on web platform
   React.useEffect(() => {
@@ -62,11 +94,11 @@ export default function HomeScreen() {
         // Use dynamic imports for both caching and fetching
         const { fetchHtml } = await import('@/lib/dcs');
         const { getWithRevalidate, getServiceContentKey, TTL } = await import('@/lib/cache');
-        
+
         // Generate cache key from URL
         const serviceId = selectedResource.url.replace(/[^a-z0-9]/gi, '_');
         const cacheKey = getServiceContentKey(serviceId, selectedResource.language);
-        
+
         // Use stale-while-revalidate for HTML content
         const html = await getWithRevalidate(
           cacheKey,
@@ -74,7 +106,7 @@ export default function HomeScreen() {
           TTL.ONE_MONTH, // Cache service content for 30 days
           true // Use FileSystem for large HTML files
         );
-        
+
         if (!cancelled) {
           setHtmlContent(html);
         }
@@ -99,15 +131,14 @@ export default function HomeScreen() {
 
   const handleBack = () => {
     if (Platform.OS === 'web') {
-      // Navigate back in iframe history
-      if (iframeRef.current?.contentWindow) {
-        iframeRef.current.contentWindow.history.back();
+      const contentWindow = iframeRef.current?.contentWindow;
+      if (contentWindow && contentWindow.history.length > 1) {
+        contentWindow.history.back();
+      } else {
+        openOverlay();
       }
     } else {
-      // Navigate back in WebView history
-      if (webViewRef.current) {
-        webViewRef.current.goBack();
-      }
+      webViewRef.current?.goBack();
     }
   };
 
@@ -123,19 +154,19 @@ export default function HomeScreen() {
   // Clear all search highlights
   const clearSearchHighlights = () => {
     if (Platform.OS !== 'web' || !iframeRef.current) return;
-    
+
     const iframeDoc = iframeRef.current.contentDocument;
     if (!iframeDoc) return;
 
     const highlights = iframeDoc.querySelectorAll('.search-highlight, .search-highlight-current');
-    highlights.forEach(highlight => {
+    highlights.forEach((highlight) => {
       const parent = highlight.parentNode;
       if (parent) {
         parent.replaceChild(document.createTextNode(highlight.textContent || ''), highlight);
         parent.normalize();
       }
     });
-    
+
     matchElementsRef.current = [];
     setMatchCount(0);
     setCurrentMatchIndex(0);
@@ -161,9 +192,10 @@ export default function HomeScreen() {
     const matches: HTMLElement[] = [];
     const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     console.log('Searching for:', query, 'Escaped:', escapedQuery);
-    
+
     const walkTextNodes = (node: Node) => {
-      if (node.nodeType === 3) { // Text node
+      if (node.nodeType === 3) {
+        // Text node
         const text = node.textContent || '';
         // Use a fresh regex for each test to avoid lastIndex issues
         const testRegex = new RegExp(escapedQuery, 'i');
@@ -171,20 +203,21 @@ export default function HomeScreen() {
           const span = iframeDoc.createElement('span');
           const parent = node.parentNode;
           if (!parent) return;
-          
+
           // Use a fresh regex for replacement
           const replaceRegex = new RegExp(escapedQuery, 'gi');
           span.innerHTML = text.replace(replaceRegex, (match) => {
             return `<mark class="search-highlight" style="background-color: #fef08a; padding: 2px 0;">${match}</mark>`;
           });
-          
+
           parent.replaceChild(span, node);
-          
+
           // Collect all highlight elements
           const highlightElements = span.querySelectorAll('.search-highlight');
-          highlightElements.forEach(el => matches.push(el as HTMLElement));
+          highlightElements.forEach((el) => matches.push(el as HTMLElement));
         }
-      } else if (node.nodeType === 1) { // Element node
+      } else if (node.nodeType === 1) {
+        // Element node
         const element = node as HTMLElement;
         // Skip script, style, and other non-visible elements
         if (!['SCRIPT', 'STYLE', 'NOSCRIPT', 'IFRAME'].includes(element.tagName)) {
@@ -199,10 +232,10 @@ export default function HomeScreen() {
     } else {
       console.log('No iframe body found');
     }
-    
+
     matchElementsRef.current = matches;
     setMatchCount(matches.length);
-    
+
     if (matches.length > 0) {
       setCurrentMatchIndex(0);
       highlightCurrentMatch(0);
@@ -215,7 +248,7 @@ export default function HomeScreen() {
     if (!matches.length || index < 0 || index >= matches.length) return;
 
     // Remove current highlight from all matches
-    matches.forEach(match => {
+    matches.forEach((match) => {
       match.className = 'search-highlight';
       match.style.backgroundColor = '#fef08a';
     });
@@ -225,7 +258,7 @@ export default function HomeScreen() {
     currentMatch.className = 'search-highlight-current';
     currentMatch.style.backgroundColor = '#facc15';
     currentMatch.style.fontWeight = 'bold';
-    
+
     // Scroll to current match
     currentMatch.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
@@ -234,7 +267,7 @@ export default function HomeScreen() {
   const nextMatch = () => {
     const matches = matchElementsRef.current;
     if (matches.length === 0) return;
-    
+
     const nextIndex = (currentMatchIndex + 1) % matches.length;
     setCurrentMatchIndex(nextIndex);
     highlightCurrentMatch(nextIndex);
@@ -244,7 +277,7 @@ export default function HomeScreen() {
   const previousMatch = () => {
     const matches = matchElementsRef.current;
     if (matches.length === 0) return;
-    
+
     const prevIndex = currentMatchIndex === 0 ? matches.length - 1 : currentMatchIndex - 1;
     setCurrentMatchIndex(prevIndex);
     highlightCurrentMatch(prevIndex);
@@ -275,7 +308,7 @@ export default function HomeScreen() {
     }
 
     const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    
+
     // Inject search JavaScript into WebView
     const searchScript = `
       (function() {
@@ -462,7 +495,7 @@ export default function HomeScreen() {
   }, [searchQuery]);
 
   // ==================== ANNOTATIONS LOGIC ====================
-  
+
   // Get service type from selected resource
   const getServiceType = (): string => {
     if (!selectedResource) return '';
@@ -478,38 +511,29 @@ export default function HomeScreen() {
 
     const serviceType = getServiceType();
     const annotations = getAnnotationsForService(serviceType);
-    
+
     // Inject annotations into iframe
     const injectAnnotations = async () => {
       const iframeDoc = iframeRef.current?.contentDocument;
       if (!iframeDoc) return;
 
       // Import helper functions dynamically
-      const { 
-        createAnnotationMarker, 
-        insertAnnotationMarker, 
-        removeAllAnnotationMarkers 
-      } = await import('@/lib/annotations-helper');
+      const { createAnnotationMarker, insertAnnotationMarker, removeAllAnnotationMarkers } =
+        await import('@/lib/annotations-helper');
 
       // Remove existing annotations
       removeAllAnnotationMarkers(iframeDoc);
 
       // Insert each annotation
       annotations.forEach((annotation) => {
-        const iconDef = annotation.type === 'icon' && annotation.iconType
-          ? ICON_DEFINITIONS.find(d => d.type === annotation.iconType)
-          : null;
-        
-        const emoji = annotation.type === 'note' 
-          ? NOTE_EMOJI 
-          : (iconDef?.emoji || '🔖');
+        const iconDef =
+          annotation.type === 'icon' && annotation.iconType
+            ? ICON_DEFINITIONS.find((d) => d.type === annotation.iconType)
+            : null;
 
-        const marker = createAnnotationMarker(
-          iframeDoc,
-          annotation.id,
-          emoji,
-          annotation.type
-        );
+        const emoji = annotation.type === 'note' ? NOTE_EMOJI : iconDef?.emoji || '🔖';
+
+        const marker = createAnnotationMarker(iframeDoc, annotation.id, emoji, annotation.type);
 
         // Add click handler
         marker.addEventListener('click', (e) => {
@@ -520,11 +544,11 @@ export default function HomeScreen() {
             setNoteViewerVisible(true);
           } else if (annotation.type === 'icon') {
             // Get icon label for confirmation message
-            const iconDef = annotation.iconType 
-              ? ICON_DEFINITIONS.find(d => d.type === annotation.iconType)
+            const iconDef = annotation.iconType
+              ? ICON_DEFINITIONS.find((d) => d.type === annotation.iconType)
               : null;
             const iconLabel = iconDef?.label || 'this';
-            
+
             // Show delete confirmation for icon
             if (window.confirm(`Do you want to remove the ${iconLabel} icon?`)) {
               removeAnnotation(annotation.id).then(() => {
@@ -567,11 +591,11 @@ export default function HomeScreen() {
   // Setup click listener for web when in annotation mode
   React.useEffect(() => {
     if (Platform.OS !== 'web' || !iframeLoaded || !iframeRef.current || !annotationMode) {
-      console.log('Annotation click listener not attached:', { 
-        platform: Platform.OS, 
-        iframeLoaded, 
-        hasIframeRef: !!iframeRef.current, 
-        annotationMode 
+      console.log('Annotation click listener not attached:', {
+        platform: Platform.OS,
+        iframeLoaded,
+        hasIframeRef: !!iframeRef.current,
+        annotationMode,
       });
       return;
     }
@@ -586,7 +610,7 @@ export default function HomeScreen() {
 
     const handleClick = async (e: MouseEvent) => {
       console.log('🎯 Click detected in annotation mode!', e);
-      
+
       // Don't trigger if clicking on an existing annotation marker
       const target = e.target as HTMLElement;
       if (target.classList.contains('dcs-annotation')) {
@@ -596,12 +620,12 @@ export default function HomeScreen() {
 
       e.preventDefault();
       e.stopPropagation();
-      
+
       console.log('Getting position from click event...');
       const { getPositionFromEvent } = await import('@/lib/annotations-helper');
       const position = getPositionFromEvent(iframeDoc, e);
       console.log('Position:', position);
-      
+
       if (position) {
         // Check if any annotation features are enabled
         if (!preferences.altarServerAnnotationsEnabled && !preferences.notesEnabled) {
@@ -628,9 +652,9 @@ export default function HomeScreen() {
   // Handler to inject long-press script after WebView loads
   const handleWebViewLoad = async () => {
     if (Platform.OS === 'web' || !webViewRef.current) {
-      console.log('❌ Not injecting long-press listener:', { 
-        platform: Platform.OS, 
-        hasWebViewRef: !!webViewRef.current 
+      console.log('❌ Not injecting long-press listener:', {
+        platform: Platform.OS,
+        hasWebViewRef: !!webViewRef.current,
       });
       return;
     }
@@ -648,21 +672,21 @@ export default function HomeScreen() {
   // Enhanced WebView message handler for annotations
   const handleWebViewMessageWithAnnotations = (event: any) => {
     console.log('📨 WebView message received:', event.nativeEvent.data);
-    
+
     // Call existing handler first
     handleWebViewMessage(event);
 
     try {
       const data = JSON.parse(event.nativeEvent.data);
-      
+
       // Handle log messages from WebView
       if (data.type === 'log') {
         console.log('[WebView]', data.message, data.data || '');
         return;
       }
-      
+
       console.log('📦 Parsed data:', data);
-      
+
       if (data.type === 'longPress' && data.position) {
         // Check if any annotation features are enabled
         if (!preferences.altarServerAnnotationsEnabled && !preferences.notesEnabled) {
@@ -676,8 +700,8 @@ export default function HomeScreen() {
         console.log('✅ Annotation click detected for ID:', data.annotationId);
         const serviceType = getServiceType();
         const annotations = getAnnotationsForService(serviceType);
-        const annotation = annotations.find(a => a.id === data.annotationId);
-        
+        const annotation = annotations.find((a) => a.id === data.annotationId);
+
         if (annotation) {
           if (annotation.type === 'note') {
             console.log('✅ Showing note viewer for annotation');
@@ -686,38 +710,35 @@ export default function HomeScreen() {
           } else if (annotation.type === 'icon') {
             console.log('✅ Showing delete confirmation for icon annotation');
             setSelectedAnnotation(annotation);
-            
+
             // Get icon label
-            const iconDef = annotation.iconType 
-              ? ICON_DEFINITIONS.find(d => d.type === annotation.iconType)
+            const iconDef = annotation.iconType
+              ? ICON_DEFINITIONS.find((d) => d.type === annotation.iconType)
               : null;
             const iconLabel = iconDef?.label || 'this';
-            
+
             // Show delete confirmation for icon
-            Alert.alert(
-              'Remove Icon',
-              `Do you want to remove the ${iconLabel} icon?`,
-              [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Remove',
-                  style: 'destructive',
-                  onPress: async () => {
-                    await removeAnnotation(data.annotationId);
-                    // Reload annotations
-                    if (Platform.OS === 'web' && iframeRef.current) {
-                      setIframeLoaded(false);
-                      setTimeout(() => setIframeLoaded(true), 50);
-                    } else if (webViewRef.current) {
-                      const annotations = getAnnotationsForService(serviceType);
-                      const { generateAnnotationInjectionScript } = await import('@/lib/annotations-native');
-                      const script = generateAnnotationInjectionScript(annotations);
-                      webViewRef.current.injectJavaScript(script);
-                    }
-                  },
+            Alert.alert('Remove Icon', `Do you want to remove the ${iconLabel} icon?`, [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Remove',
+                style: 'destructive',
+                onPress: async () => {
+                  await removeAnnotation(data.annotationId);
+                  // Reload annotations
+                  if (Platform.OS === 'web' && iframeRef.current) {
+                    setIframeLoaded(false);
+                    setTimeout(() => setIframeLoaded(true), 50);
+                  } else if (webViewRef.current) {
+                    const annotations = getAnnotationsForService(serviceType);
+                    const { generateAnnotationInjectionScript } =
+                      await import('@/lib/annotations-native');
+                    const script = generateAnnotationInjectionScript(annotations);
+                    webViewRef.current.injectJavaScript(script);
+                  }
                 },
-              ]
-            );
+              },
+            ]);
           }
         }
       } else {
@@ -731,10 +752,10 @@ export default function HomeScreen() {
   // Handle annotation icon selection
   const handleSelectIcon = async (iconType: IconType) => {
     if (!pendingAnnotationPosition) return;
-    
+
     const serviceType = getServiceType();
     await addIconAnnotation(serviceType, iconType, pendingAnnotationPosition);
-    
+
     // Reload annotations
     if (Platform.OS === 'web' && iframeRef.current) {
       // Trigger re-render by updating a state
@@ -752,10 +773,10 @@ export default function HomeScreen() {
   // Handle note creation
   const handleCreateNote = async (noteText: string) => {
     if (!pendingAnnotationPosition) return;
-    
+
     const serviceType = getServiceType();
     await addNoteAnnotation(serviceType, noteText, pendingAnnotationPosition);
-    
+
     // Reload annotations (same as icon)
     if (Platform.OS === 'web' && iframeRef.current) {
       setIframeLoaded(false);
@@ -771,9 +792,9 @@ export default function HomeScreen() {
   // Handle note update
   const handleUpdateNote = async (newText: string) => {
     if (!selectedAnnotation) return;
-    
+
     await updateNoteAnnotation(selectedAnnotation.id, newText);
-    
+
     // Reload annotations
     const serviceType = getServiceType();
     if (Platform.OS === 'web' && iframeRef.current) {
@@ -790,9 +811,9 @@ export default function HomeScreen() {
   // Handle annotation deletion
   const handleDeleteAnnotation = async () => {
     if (!selectedAnnotation) return;
-    
+
     await removeAnnotation(selectedAnnotation.id);
-    
+
     // Reload annotations
     const serviceType = getServiceType();
     if (Platform.OS === 'web' && iframeRef.current) {
@@ -814,15 +835,22 @@ export default function HomeScreen() {
         {selectedResource ? (
           // Toolbar when content is loaded
           <View style={styles.toolbar}>
-            <Pressable style={styles.toolbarButton} onPress={handleBack}>
+            <Pressable
+              style={[
+                styles.toolbarButton,
+                Platform.OS !== 'web' && !canGoBack && styles.toolbarButtonDisabled,
+              ]}
+              onPress={handleBack}
+              disabled={Platform.OS !== 'web' && !canGoBack}
+            >
               <Text style={styles.toolbarButtonText}>← Back</Text>
             </Pressable>
             <Text style={styles.toolbarTitle} numberOfLines={1}>
               {selectedResource.serviceTitle}
             </Text>
             {Platform.OS === 'web' && (
-              <Pressable 
-                style={[styles.toolbarButton, annotationMode && styles.toolbarButtonActive]} 
+              <Pressable
+                style={[styles.toolbarButton, annotationMode && styles.toolbarButtonActive]}
                 onPress={() => setAnnotationMode(!annotationMode)}
               >
                 <Text style={styles.toolbarButtonText}>📌 {annotationMode ? 'Done' : 'Note'}</Text>
@@ -859,10 +887,16 @@ export default function HomeScreen() {
                     {currentMatchIndex + 1} of {matchCount}
                   </Text>
                   <View style={styles.navButtons}>
-                    <Pressable style={styles.navButton} onPress={Platform.OS === 'web' ? previousMatch : nativePreviousMatch}>
+                    <Pressable
+                      style={styles.navButton}
+                      onPress={Platform.OS === 'web' ? previousMatch : nativePreviousMatch}
+                    >
                       <Text style={styles.navButtonText}>↑</Text>
                     </Pressable>
-                    <Pressable style={styles.navButton} onPress={Platform.OS === 'web' ? nextMatch : nativeNextMatch}>
+                    <Pressable
+                      style={styles.navButton}
+                      onPress={Platform.OS === 'web' ? nextMatch : nativeNextMatch}
+                    >
                       <Text style={styles.navButtonText}>↓</Text>
                     </Pressable>
                   </View>
@@ -871,7 +905,10 @@ export default function HomeScreen() {
               {searchQuery.length > 0 && matchCount === 0 && (
                 <Text style={styles.noMatchText}>No matches</Text>
               )}
-              <Pressable style={styles.clearButton} onPress={() => setSearchQuery('')}>
+              <Pressable
+                style={styles.clearButton}
+                onPress={() => (searchQuery.length === 0 ? toggleSearch() : setSearchQuery(''))}
+              >
                 <Text style={styles.clearButtonText}>✕</Text>
               </Pressable>
             </View>
@@ -880,17 +917,15 @@ export default function HomeScreen() {
           <View style={styles.placeholder}>
             <Text style={styles.placeholderTitle}>Select a Service</Text>
             <Text style={styles.placeholderText}>
-              Tap the Services calendar icon below to choose a date and load the DCS resources for that day.
+              Tap the Services calendar icon below to choose a date and load the DCS resources for
+              that day.
             </Text>
           </View>
         ) : null}
 
         {/* Audio Player */}
         {currentAudioUrl && (
-          <AudioPlayer
-            audioUrl={currentAudioUrl}
-            onClose={() => setCurrentAudioUrl(undefined)}
-          />
+          <AudioPlayer audioUrl={currentAudioUrl} onClose={() => setCurrentAudioUrl(undefined)} />
         )}
 
         <View style={styles.viewer}>
@@ -940,19 +975,27 @@ export default function HomeScreen() {
                 onShouldStartLoadWithRequest={(request: any) => {
                   const url = request.url || '';
                   const fileType = getFileType(url);
-                  
+
                   // Intercept audio URLs
                   if (fileType === 'audio') {
                     console.log('Intercepting audio URL:', url);
                     setCurrentAudioUrl(url);
                     return false; // Block navigation
                   }
-                  
+
                   // Allow other navigation
                   return true;
                 }}
                 onNavigationStateChange={(navState: any) => {
                   setCanGoBack(navState.canGoBack);
+                  // If back was pressed and the WebView navigated, cancel the overlay fallback
+                  if (backPressedRef.current) {
+                    backPressedRef.current = false;
+                    if (backTimeoutRef.current) {
+                      clearTimeout(backTimeoutRef.current);
+                      backTimeoutRef.current = null;
+                    }
+                  }
                 }}
                 onLoadEnd={handleWebViewLoad}
                 onMessage={handleWebViewMessageWithAnnotations}
@@ -965,7 +1008,7 @@ export default function HomeScreen() {
           )}
         </View>
       </SafeAreaView>
-      
+
       {/* Annotation Modals */}
       <AnnotationSelector
         visible={annotationSelectorVisible}
@@ -976,7 +1019,7 @@ export default function HomeScreen() {
         onSelectIcon={handleSelectIcon}
         onCreateNote={handleCreateNote}
       />
-      
+
       <NoteViewer
         visible={noteViewerVisible}
         noteText={selectedAnnotation?.noteText || ''}
@@ -1024,6 +1067,9 @@ const styles = StyleSheet.create({
   },
   toolbarButtonActive: {
     backgroundColor: '#facc15',
+  },
+  toolbarButtonDisabled: {
+    opacity: 0.35,
   },
   toolbarButtonText: {
     color: '#ffffff',

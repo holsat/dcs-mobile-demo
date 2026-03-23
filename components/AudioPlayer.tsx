@@ -3,7 +3,8 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { Audio, InterruptionModeIOS, InterruptionModeAndroid, AVPlaybackStatus } from 'expo-av';
 import { downloadAndShareFile, extractFilename, getFileType } from '@/lib/file-download';
-import { cacheAsset, getCache, getAssetKey } from '@/lib/cache';
+import * as FileSystem from 'expo-file-system/legacy';
+import { cacheAsset, getCache, getAssetKey, removeCache } from '@/lib/cache';
 
 interface AudioPlayerProps {
   audioUrl: string;
@@ -33,7 +34,7 @@ export function AudioPlayer({ audioUrl, onClose }: AudioPlayerProps) {
   const loadAudio = async () => {
     try {
       setIsLoading(true);
-      
+
       if (sound) {
         await sound.unloadAsync();
       }
@@ -50,20 +51,25 @@ export function AudioPlayer({ audioUrl, onClose }: AudioPlayerProps) {
 
       // Try to load from cache first, otherwise cache and load
       let audioSource: string = audioUrl;
-      
-      // Check if audio is already cached
+
+      // Check if audio is already cached and the local file still exists
       const cacheKey = getAssetKey(audioUrl);
       const cached = await getCache<string>(cacheKey);
-      
-      if (cached && !cached.data.startsWith('http')) {
-        // Use cached local file
-        console.log('Loading audio from cache:', cached.data);
-        audioSource = cached.data;
+
+      if (cached?.data) {
+        const fileInfo = await FileSystem.getInfoAsync(cached.data);
+        if (fileInfo.exists) {
+          console.log('Loading audio from cache:', cached.data);
+          audioSource = cached.data;
+        } else {
+          // Cache entry is stale (file was evicted) — clear it so cacheAsset re-downloads
+          console.log('Cached audio file missing, re-downloading:', audioUrl);
+          await removeCache(cacheKey);
+          audioSource = await cacheAsset(audioUrl);
+        }
       } else {
-        // Cache the audio file first
         console.log('Caching audio file:', audioUrl);
         audioSource = await cacheAsset(audioUrl);
-        console.log('Audio cached, loading from:', audioSource);
       }
 
       const { sound: newSound } = await Audio.Sound.createAsync(
@@ -83,7 +89,7 @@ export function AudioPlayer({ audioUrl, onClose }: AudioPlayerProps) {
   const onPlaybackStatusUpdate = (status: AVPlaybackStatus) => {
     if (status.isLoaded) {
       const pos = status.positionMillis / 1000;
-      
+
       // For streaming audio, durationMillis may be undefined
       // So we capture it when the audio finishes playing
       if (status.durationMillis) {
@@ -92,10 +98,10 @@ export function AudioPlayer({ audioUrl, onClose }: AudioPlayerProps) {
         // When audio finishes, the position is the duration
         setDuration(pos);
       }
-      
+
       setPosition(pos);
       setIsPlaying(status.isPlaying || false);
-      
+
       if (status.didJustFinish) {
         setHasFinished(true);
         setIsPlaying(false);
@@ -160,7 +166,7 @@ export function AudioPlayer({ audioUrl, onClose }: AudioPlayerProps) {
 
   const handleSeekComplete = async (value: number) => {
     if (!sound || duration === 0) return;
-    
+
     try {
       const seekPosition = value * duration * 1000; // Convert to milliseconds
       await sound.setPositionAsync(seekPosition);
