@@ -10,6 +10,8 @@ import {
 } from 'react-native';
 import { Calendar } from 'react-native-calendars';
 
+import { useServices } from '@/contexts/ServicesContext';
+
 // Define DateObject type inline since it's not exported in some versions
 type DateObject = {
   year: number;
@@ -18,8 +20,6 @@ type DateObject = {
   dateString: string;
   timestamp: number;
 };
-
-import { useServices } from '@/contexts/ServicesContext';
 
 export function ServicesOverlay() {
   const {
@@ -101,11 +101,55 @@ export function ServicesOverlay() {
                 markedDates={markedDates}
                 disableAllTouchEventsForDisabledDays
                 theme={{
-                  selectedDayBackgroundColor: '#2563eb',
-                  todayTextColor: '#2563eb',
                   arrowColor: '#2563eb',
-                  textDisabledColor: '#cbd5f5',
-                  dotColor: '#2563eb',
+                }}
+                dayComponent={({ date, state, marking, onPress }: any) => {
+                  const isToday = state === 'today';
+                  const isSelected = !!marking?.selected;
+                  const isDisabled = state === 'disabled' || !!marking?.disableTouchEvent;
+                  const hasDot = !!marking?.marked;
+                  return (
+                    <Pressable
+                      onPress={() => !isDisabled && onPress && onPress(date)}
+                      disabled={isDisabled}
+                      style={{ alignItems: 'center', paddingVertical: 4 }}
+                    >
+                      <View
+                        style={[
+                          {
+                            width: 32,
+                            height: 32,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderRadius: 16,
+                          },
+                          isSelected && { backgroundColor: '#2563eb' },
+                          isToday && !isSelected && { borderWidth: 1.5, borderColor: '#ef4444' },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            { fontSize: 14, color: '#111827' },
+                            isSelected && { color: '#ffffff' },
+                            isDisabled && { color: '#cbd5e1' },
+                          ]}
+                        >
+                          {date?.day}
+                        </Text>
+                      </View>
+                      {hasDot && (
+                        <View
+                          style={{
+                            width: 5,
+                            height: 5,
+                            borderRadius: 3,
+                            backgroundColor: isSelected ? '#ffffff' : '#2563eb',
+                            marginTop: 2,
+                          }}
+                        />
+                      )}
+                    </Pressable>
+                  );
                 }}
               />
             )}
